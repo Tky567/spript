@@ -1,6 +1,0 @@
-down tool
-echo "Installing dependencies..." && pkg update && pkg upgrade -y && pkg install python -y && pip install requests aiohttp colorama psutil
-pip install crypto
-pip install pycryptodome
-run tool
-su -c "cd /sdcard/download && export PATH=$PATH:/data/data/com.termux/files/usr/bin && export TERM=xterm-256color && python ./freerejoin.py"

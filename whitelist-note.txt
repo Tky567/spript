@@ -46,7 +46,6 @@ weight
 defibrillator
 engine
 axe
-axe
 muhoboika
 stairs
 gear

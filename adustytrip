@@ -1,0 +1,206 @@
+local WHITELIST_URL = "https://raw.githubusercontent.com/Tky567/script/refs/heads/Script/whitelist-note.txt"
+
+local plr = game:GetService("Players").LocalPlayer
+local char = plr.Character or plr.CharacterAdded:Wait()
+local HttpService = game:GetService("HttpService")
+local whitelist = {}
+
+-- 📥 Tải danh sách trắng
+local function loadWhitelist()
+	local success, result = pcall(function()
+		local response = game:HttpGet(WHITELIST_URL)
+		for line in response:gmatch("[^\r\n]+") do
+			table.insert(whitelist, line:lower())
+		end
+	end)
+	if not success then
+		warn("⚠️ Không thể tải danh sách trắng:", result)
+	end
+end
+
+-- Kiểm tra hợp lệ
+local function isWhitelisted(name)
+	local lname = name:lower()
+	for _, allowed in ipairs(whitelist) do
+		if lname == allowed then return true end
+	end
+	return false
+end
+
+-- Loại engine trong van/sedan
+local function isBlacklistedException(item)
+	if item.Name ~= "engine" then return false end
+	local van = workspace:FindFirstChild("van")
+	local sedan = workspace:FindFirstChild("sedan")
+	if van and item:IsDescendantOf(van) then return true end
+	if sedan and item:IsDescendantOf(sedan) then return true end
+	return false
+end
+
+loadWhitelist()
+
+-- UI
+local gui = Instance.new("ScreenGui", plr:WaitForChild("PlayerGui"))
+gui.Name = "BringItemUI"
+gui.ResetOnSpawn = false
+
+local frame = Instance.new("Frame", gui)
+frame.Size = UDim2.new(0, 260, 0, 390)
+frame.Position = UDim2.new(0, 20, 0, 100)
+frame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+
+local title = Instance.new("TextLabel", frame)
+title.Size = UDim2.new(1, 0, 0, 30)
+title.Text = "Bring + NetworkOwnership"
+title.TextColor3 = Color3.new(1, 1, 1)
+title.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+title.Font = Enum.Font.SourceSansBold
+title.TextSize = 18
+
+local searchBox = Instance.new("TextBox", frame)
+searchBox.Size = UDim2.new(1, -20, 0, 25)
+searchBox.Position = UDim2.new(0, 10, 0, 35)
+searchBox.PlaceholderText = "Nhập tên vật thể..."
+searchBox.Text = ""
+searchBox.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+searchBox.TextColor3 = Color3.new(1, 1, 1)
+searchBox.Font = Enum.Font.SourceSans
+searchBox.TextSize = 16
+searchBox.ClearTextOnFocus = false
+
+local refresh = Instance.new("TextButton", frame)
+refresh.Size = UDim2.new(1, -20, 0, 25)
+refresh.Position = UDim2.new(0, 10, 0, 65)
+refresh.Text = "🔄 Làm mới"
+refresh.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+refresh.TextColor3 = Color3.new(1, 1, 1)
+refresh.Font = Enum.Font.SourceSans
+refresh.TextSize = 16
+
+local bring = Instance.new("TextButton", frame)
+bring.Size = UDim2.new(1, -20, 0, 25)
+bring.Position = UDim2.new(0, 10, 0, 95)
+bring.Text = "📦 Bring + Lừa Server"
+bring.BackgroundColor3 = refresh.BackgroundColor3
+bring.TextColor3 = refresh.TextColor3
+bring.Font = refresh.Font
+bring.TextSize = refresh.TextSize
+
+local scroll = Instance.new("ScrollingFrame", frame)
+scroll.Size = UDim2.new(1, -20, 1, -135)
+scroll.Position = UDim2.new(0, 10, 0, 130)
+scroll.ScrollBarThickness = 6
+scroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+scroll.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+
+getgenv().selectedItemName = nil
+
+-- Viền highlight
+local function highlight(target)
+	if not target:IsA("Instance") then return end
+	local hl = Instance.new("Highlight")
+	hl.FillColor = Color3.fromRGB(255, 255, 0)
+	hl.OutlineColor = Color3.new(1, 1, 1)
+	hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+	hl.Parent = target
+end
+
+-- Hiển thị danh sách hợp lệ
+local function update()
+	scroll:ClearAllChildren()
+	local added = {}
+	local filter = searchBox.Text:lower()
+	local y = 0
+
+	for _, item in ipairs(workspace:GetDescendants()) do
+		if (item:IsA("BasePart") or item:IsA("Model")) then
+			local name = item.Name
+			if not isWhitelisted(name) then continue end
+			if isBlacklistedException(item) then continue end
+			if added[name] then continue end
+			if filter ~= "" and not name:lower():find(filter) then continue end
+
+			added[name] = true
+
+			local btn = Instance.new("TextButton", scroll)
+			btn.Size = UDim2.new(1, 0, 0, 25)
+			btn.Position = UDim2.new(0, 0, 0, y)
+			btn.Text = name
+			btn.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+			btn.TextColor3 = Color3.new(1, 1, 1)
+			btn.Font = Enum.Font.SourceSans
+			btn.TextSize = 16
+
+			btn.MouseButton1Click:Connect(function()
+				getgenv().selectedItemName = name
+				print("✅ Đã chọn:", name)
+			end)
+
+			y += 30
+		end
+	end
+
+	scroll.CanvasSize = UDim2.new(0, 0, 0, y)
+end
+
+-- Bring + ownership an toàn
+local function trySetPrimary(model)
+	if not model.PrimaryPart then
+		for _, p in ipairs(model:GetDescendants()) do
+			if p:IsA("BasePart") then
+				pcall(function() model.PrimaryPart = p end)
+				break
+			end
+		end
+	end
+end
+
+local function bringItems()
+	local name = getgenv().selectedItemName
+	local hrp = char:FindFirstChild("HumanoidRootPart")
+	if not name or not hrp then
+		warn("❌ Chưa chọn vật thể hoặc không có HRP")
+		return
+	end
+
+	local targetPos = hrp.Position + Vector3.new(0, 10, 0)
+
+	for _, item in ipairs(workspace:GetDescendants()) do
+		if item.Name == name and (item:IsA("BasePart") or item:IsA("Model")) then
+			if isBlacklistedException(item) then continue end
+			local model = item:IsA("Model") and item or item:FindFirstAncestorOfClass("Model")
+
+			if item:IsA("BasePart") then
+				item.Anchored = false
+				item.CanCollide = true
+				item.CFrame = CFrame.new(targetPos)
+				highlight(item)
+				task.delay(0.15, function()
+					pcall(function() item:SetNetworkOwner(plr) end)
+				end)
+			elseif model then
+				trySetPrimary(model)
+				if model.PrimaryPart then
+					model.PrimaryPart.Anchored = false
+					model.PrimaryPart.CanCollide = true
+					model:SetPrimaryPartCFrame(CFrame.new(targetPos))
+					highlight(model)
+					task.delay(0.15, function()
+						pcall(function() model.PrimaryPart:SetNetworkOwner(plr) end)
+					end)
+				end
+			end
+		end
+	end
+end
+
+-- Kết nối nút
+refresh.MouseButton1Click:Connect(function()
+	loadWhitelist()
+	update()
+end)
+
+bring.MouseButton1Click:Connect(bringItems)
+searchBox:GetPropertyChangedSignal("Text"):Connect(update)
+
+update()

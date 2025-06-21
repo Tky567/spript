@@ -2,33 +2,32 @@ local WHITELIST_URL = "https://raw.githubusercontent.com/Tky567/script/refs/head
 
 local plr = game:GetService("Players").LocalPlayer
 local char = plr.Character or plr.CharacterAdded:Wait()
-local HttpService = game:GetService("HttpService")
 local whitelist = {}
 
--- 📥 Tải danh sách trắng
+-- Tải danh sách trắng
 local function loadWhitelist()
 	local success, result = pcall(function()
-		local response = game:HttpGet(WHITELIST_URL)
-		for line in response:gmatch("[^\r\n]+") do
+		local res = game:HttpGet(WHITELIST_URL)
+		for line in res:gmatch("[^\r\n]+") do
 			table.insert(whitelist, line:lower())
 		end
 	end)
 	if not success then
-		warn("⚠️ Không thể tải danh sách trắng:", result)
+		warn("⚠️ Không tải được whitelist:", result)
 	end
 end
 
 -- Kiểm tra hợp lệ
 local function isWhitelisted(name)
 	local lname = name:lower()
-	for _, allowed in ipairs(whitelist) do
-		if lname == allowed then return true end
+	for _, allow in ipairs(whitelist) do
+		if lname == allow then return true end
 	end
 	return false
 end
 
--- Loại engine trong van/sedan
-local function isBlacklistedException(item)
+-- Danh sách đen đặc biệt (engine trong van/sedan)
+local function isBlacklisted(item)
 	if item.Name ~= "engine" then return false end
 	local van = workspace:FindFirstChild("van")
 	local sedan = workspace:FindFirstChild("sedan")
@@ -41,7 +40,7 @@ loadWhitelist()
 
 -- UI
 local gui = Instance.new("ScreenGui", plr:WaitForChild("PlayerGui"))
-gui.Name = "BringItemUI"
+gui.Name = "BringUI"
 gui.ResetOnSpawn = false
 
 local frame = Instance.new("Frame", gui)
@@ -51,7 +50,7 @@ frame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
 
 local title = Instance.new("TextLabel", frame)
 title.Size = UDim2.new(1, 0, 0, 30)
-title.Text = "Bring + NetworkOwnership"
+title.Text = "Bring từ Whitelist"
 title.TextColor3 = Color3.new(1, 1, 1)
 title.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
 title.Font = Enum.Font.SourceSansBold
@@ -60,7 +59,7 @@ title.TextSize = 18
 local searchBox = Instance.new("TextBox", frame)
 searchBox.Size = UDim2.new(1, -20, 0, 25)
 searchBox.Position = UDim2.new(0, 10, 0, 35)
-searchBox.PlaceholderText = "Nhập tên vật thể..."
+searchBox.PlaceholderText = "Tìm vật thể..."
 searchBox.Text = ""
 searchBox.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
 searchBox.TextColor3 = Color3.new(1, 1, 1)
@@ -80,7 +79,7 @@ refresh.TextSize = 16
 local bring = Instance.new("TextButton", frame)
 bring.Size = UDim2.new(1, -20, 0, 25)
 bring.Position = UDim2.new(0, 10, 0, 95)
-bring.Text = "📦 Bring + Lừa Server"
+bring.Text = "📦 Bring + Physics"
 bring.BackgroundColor3 = refresh.BackgroundColor3
 bring.TextColor3 = refresh.TextColor3
 bring.Font = refresh.Font
@@ -95,17 +94,7 @@ scroll.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
 
 getgenv().selectedItemName = nil
 
--- Viền highlight
-local function highlight(target)
-	if not target:IsA("Instance") then return end
-	local hl = Instance.new("Highlight")
-	hl.FillColor = Color3.fromRGB(255, 255, 0)
-	hl.OutlineColor = Color3.new(1, 1, 1)
-	hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-	hl.Parent = target
-end
-
--- Hiển thị danh sách hợp lệ
+-- Cập nhật danh sách hiển thị
 local function update()
 	scroll:ClearAllChildren()
 	local added = {}
@@ -113,37 +102,35 @@ local function update()
 	local y = 0
 
 	for _, item in ipairs(workspace:GetDescendants()) do
-		if (item:IsA("BasePart") or item:IsA("Model")) then
-			local name = item.Name
-			if not isWhitelisted(name) then continue end
-			if isBlacklistedException(item) then continue end
-			if added[name] then continue end
-			if filter ~= "" and not name:lower():find(filter) then continue end
+		if not (item:IsA("BasePart") or item:IsA("Model")) then continue end
+		if not isWhitelisted(item.Name) then continue end
+		if isBlacklisted(item) then continue end
+		if added[item.Name] then continue end
+		if filter ~= "" and not item.Name:lower():find(filter) then continue end
 
-			added[name] = true
+		added[item.Name] = true
 
-			local btn = Instance.new("TextButton", scroll)
-			btn.Size = UDim2.new(1, 0, 0, 25)
-			btn.Position = UDim2.new(0, 0, 0, y)
-			btn.Text = name
-			btn.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
-			btn.TextColor3 = Color3.new(1, 1, 1)
-			btn.Font = Enum.Font.SourceSans
-			btn.TextSize = 16
+		local btn = Instance.new("TextButton", scroll)
+		btn.Size = UDim2.new(1, 0, 0, 25)
+		btn.Position = UDim2.new(0, 0, 0, y)
+		btn.Text = item.Name
+		btn.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+		btn.TextColor3 = Color3.new(1, 1, 1)
+		btn.Font = Enum.Font.SourceSans
+		btn.TextSize = 16
 
-			btn.MouseButton1Click:Connect(function()
-				getgenv().selectedItemName = name
-				print("✅ Đã chọn:", name)
-			end)
+		btn.MouseButton1Click:Connect(function()
+			getgenv().selectedItemName = item.Name
+			print("✅ Đã chọn:", item.Name)
+		end)
 
-			y += 30
-		end
+		y += 30
 	end
 
 	scroll.CanvasSize = UDim2.new(0, 0, 0, y)
 end
 
--- Bring + ownership an toàn
+-- Set PrimaryPart nếu cần
 local function trySetPrimary(model)
 	if not model.PrimaryPart then
 		for _, p in ipairs(model:GetDescendants()) do
@@ -155,46 +142,41 @@ local function trySetPrimary(model)
 	end
 end
 
+-- Bring logic
 local function bringItems()
 	local name = getgenv().selectedItemName
 	local hrp = char:FindFirstChild("HumanoidRootPart")
-	if not name or not hrp then
-		warn("❌ Chưa chọn vật thể hoặc không có HRP")
-		return
-	end
-
+	if not name or not hrp then return end
 	local targetPos = hrp.Position + Vector3.new(0, 10, 0)
 
 	for _, item in ipairs(workspace:GetDescendants()) do
-		if item.Name == name and (item:IsA("BasePart") or item:IsA("Model")) then
-			if isBlacklistedException(item) then continue end
-			local model = item:IsA("Model") and item or item:FindFirstAncestorOfClass("Model")
+		if item.Name ~= name then continue end
+		if not (item:IsA("BasePart") or item:IsA("Model")) then continue end
+		if isBlacklisted(item) then continue end
 
-			if item:IsA("BasePart") then
-				item.Anchored = false
-				item.CanCollide = true
-				item.CFrame = CFrame.new(targetPos)
-				highlight(item)
-				task.delay(0.15, function()
-					pcall(function() item:SetNetworkOwner(plr) end)
+		local model = item:IsA("Model") and item or item:FindFirstAncestorOfClass("Model")
+		if item:IsA("BasePart") then
+			item.CFrame = CFrame.new(targetPos)
+			item.Anchored = false
+			item.CanCollide = true
+			task.delay(0.1, function()
+				pcall(function() item:SetNetworkOwner(plr) end)
+			end)
+		elseif model then
+			trySetPrimary(model)
+			if model.PrimaryPart then
+				model:SetPrimaryPartCFrame(CFrame.new(targetPos))
+				model.PrimaryPart.Anchored = false
+				model.PrimaryPart.CanCollide = true
+				task.delay(0.1, function()
+					pcall(function() model.PrimaryPart:SetNetworkOwner(plr) end)
 				end)
-			elseif model then
-				trySetPrimary(model)
-				if model.PrimaryPart then
-					model.PrimaryPart.Anchored = false
-					model.PrimaryPart.CanCollide = true
-					model:SetPrimaryPartCFrame(CFrame.new(targetPos))
-					highlight(model)
-					task.delay(0.15, function()
-						pcall(function() model.PrimaryPart:SetNetworkOwner(plr) end)
-					end)
-				end
 			end
 		end
 	end
 end
 
--- Kết nối nút
+-- Nút
 refresh.MouseButton1Click:Connect(function()
 	loadWhitelist()
 	update()

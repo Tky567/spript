@@ -1,188 +1,379 @@
+-- 🚀 Optimized Bring Script with Rayfield UI
+-- Tối ưu hiệu suất, giảm lag, xử lý lỗi tốt hơn
+
 local WHITELIST_URL = "https://raw.githubusercontent.com/Tky567/script/refs/heads/Script/whitelist-note.txt"
+local UPDATE_INTERVAL = 5 -- Cập nhật dropdown mỗi 5 giây thay vì liên tục
 
-local plr = game:GetService("Players").LocalPlayer
-local char = plr.Character or plr.CharacterAdded:Wait()
+-- Services
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
+
+-- Variables
+local LocalPlayer = Players.LocalPlayer
+local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+local HumanoidRootPart = Character:WaitForChild("HumanoidRootPart")
+
 local whitelist = {}
+local cachedItems = {}
+local lastUpdate = 0
+local isProcessing = false
 
--- Tải danh sách trắng
+-- Tải whitelist từ URL với error handling
 local function loadWhitelist()
-	local success, result = pcall(function()
-		local res = game:HttpGet(WHITELIST_URL)
-		for line in res:gmatch("[^\r\n]+") do
-			table.insert(whitelist, line:lower())
-		end
-	end)
-	if not success then
-		warn("⚠️ Không tải được whitelist:", result)
-	end
+    local success, result = pcall(function()
+        local res = game:HttpGet(WHITELIST_URL)
+        whitelist = {}
+        for line in res:gmatch("[^\r\n]+") do
+            local trimmed = line:match("^%s*(.-)%s*$") -- Trim whitespace
+            if trimmed and trimmed ~= "" then
+                table.insert(whitelist, trimmed:lower())
+            end
+        end
+    end)
+    
+    if not success then
+        warn("⚠️ Không thể tải whitelist:", result)
+        return false
+    end
+    
+    print("✅ Đã tải whitelist thành công:", #whitelist, "items")
+    return true
 end
 
--- Kiểm tra hợp lệ
+-- Kiểm tra whitelist nhanh hơn bằng dictionary
+local whitelistDict = {}
+local function buildWhitelistDict()
+    whitelistDict = {}
+    for _, name in ipairs(whitelist) do
+        whitelistDict[name] = true
+    end
+end
+
 local function isWhitelisted(name)
-	local lname = name:lower()
-	for _, allow in ipairs(whitelist) do
-		if lname == allow then return true end
-	end
-	return false
+    return whitelistDict[name:lower()] or false
 end
 
--- Danh sách đen đặc biệt (engine trong van/sedan)
 local function isBlacklisted(item)
-	if item.Name ~= "engine" then return false end
-	local van = workspace:FindFirstChild("van")
-	local sedan = workspace:FindFirstChild("sedan")
-	if van and item:IsDescendantOf(van) then return true end
-	if sedan and item:IsDescendantOf(sedan) then return true end
-	return false
+    if item.Name ~= "engine" then return false end
+    
+    local van = workspace:FindFirstChild("van")
+    local sedan = workspace:FindFirstChild("sedan")
+    
+    return (van and item:IsDescendantOf(van)) or (sedan and item:IsDescendantOf(sedan))
 end
 
-loadWhitelist()
+-- Tải Rayfield với error handling
+local function loadRayfield()
+    local success, Rayfield = pcall(function()
+        return loadstring(game:HttpGet("https://raw.githubusercontent.com/linhmcfake/LuaLibrary/refs/heads/main/RayField.lua"))()
+    end)
+    
+    if not success then
+        warn("⚠️ Không thể tải Rayfield UI:", Rayfield)
+        return nil
+    end
+    
+    return Rayfield
+end
 
--- UI
-local gui = Instance.new("ScreenGui", plr:WaitForChild("PlayerGui"))
-gui.Name = "BringUI"
-gui.ResetOnSpawn = false
+-- Load Rayfield
+local Rayfield = loadRayfield()
+if not Rayfield then
+    return
+end
 
-local frame = Instance.new("Frame", gui)
-frame.Size = UDim2.new(0, 260, 0, 390)
-frame.Position = UDim2.new(0, 20, 0, 100)
-frame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+-- Tạo GUI
+local Window = Rayfield:CreateWindow({
+    Name = "🚀 Optimized Bring Tool",
+    LoadingTitle = "Đang tải...",
+    LoadingSubtitle = "Vui lòng chờ...",
+    ConfigurationSaving = {
+        Enabled = false
+    }
+})
 
-local title = Instance.new("TextLabel", frame)
-title.Size = UDim2.new(1, 0, 0, 30)
-title.Text = "Bring từ Whitelist"
-title.TextColor3 = Color3.new(1, 1, 1)
-title.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-title.Font = Enum.Font.SourceSansBold
-title.TextSize = 18
+local BringTab = Window:CreateTab("📦 Bring", 4483362458)
+local SettingsTab = Window:CreateTab("⚙️ Cài đặt", 4483362458)
 
-local searchBox = Instance.new("TextBox", frame)
-searchBox.Size = UDim2.new(1, -20, 0, 25)
-searchBox.Position = UDim2.new(0, 10, 0, 35)
-searchBox.PlaceholderText = "Tìm vật thể..."
-searchBox.Text = ""
-searchBox.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
-searchBox.TextColor3 = Color3.new(1, 1, 1)
-searchBox.Font = Enum.Font.SourceSans
-searchBox.TextSize = 16
-searchBox.ClearTextOnFocus = false
-
-local refresh = Instance.new("TextButton", frame)
-refresh.Size = UDim2.new(1, -20, 0, 25)
-refresh.Position = UDim2.new(0, 10, 0, 65)
-refresh.Text = "🔄 Làm mới"
-refresh.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
-refresh.TextColor3 = Color3.new(1, 1, 1)
-refresh.Font = Enum.Font.SourceSans
-refresh.TextSize = 16
-
-local bring = Instance.new("TextButton", frame)
-bring.Size = UDim2.new(1, -20, 0, 25)
-bring.Position = UDim2.new(0, 10, 0, 95)
-bring.Text = "📦 Bring + Physics"
-bring.BackgroundColor3 = refresh.BackgroundColor3
-bring.TextColor3 = refresh.TextColor3
-bring.Font = refresh.Font
-bring.TextSize = refresh.TextSize
-
-local scroll = Instance.new("ScrollingFrame", frame)
-scroll.Size = UDim2.new(1, -20, 1, -135)
-scroll.Position = UDim2.new(0, 10, 0, 130)
-scroll.ScrollBarThickness = 6
-scroll.CanvasSize = UDim2.new(0, 0, 0, 0)
-scroll.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
-
+-- Biến global
 getgenv().selectedItemName = nil
+getgenv().bringDistance = 10
+getgenv().bringHeight = 5
 
--- Cập nhật danh sách hiển thị
-local function update()
-	scroll:ClearAllChildren()
-	local added = {}
-	local filter = searchBox.Text:lower()
-	local y = 0
+-- Dropdown cho vật thể
+local Dropdown = BringTab:CreateDropdown({
+    Name = "🎯 Chọn vật thể",
+    Options = {},
+    CurrentOption = nil,
+    Callback = function(option)
+        getgenv().selectedItemName = option
+        print("✅ Đã chọn:", option)
+    end
+})
 
-	for _, item in ipairs(workspace:GetDescendants()) do
-		if not (item:IsA("BasePart") or item:IsA("Model")) then continue end
-		if not isWhitelisted(item.Name) then continue end
-		if isBlacklisted(item) then continue end
-		if added[item.Name] then continue end
-		if filter ~= "" and not item.Name:lower():find(filter) then continue end
+-- Slider cho khoảng cách
+local DistanceSlider = SettingsTab:CreateSlider({
+    Name = "📏 Khoảng cách bring",
+    Range = {5, 50},
+    Increment = 1,
+    Suffix = "studs",
+    CurrentValue = 10,
+    Callback = function(value)
+        getgenv().bringDistance = value
+    end
+})
 
-		added[item.Name] = true
+-- Slider cho độ cao
+local HeightSlider = SettingsTab:CreateSlider({
+    Name = "📐 Độ cao bring",
+    Range = {0, 20},
+    Increment = 1,
+    Suffix = "studs",
+    CurrentValue = 5,
+    Callback = function(value)
+        getgenv().bringHeight = value
+    end
+})
 
-		local btn = Instance.new("TextButton", scroll)
-		btn.Size = UDim2.new(1, 0, 0, 25)
-		btn.Position = UDim2.new(0, 0, 0, y)
-		btn.Text = item.Name
-		btn.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
-		btn.TextColor3 = Color3.new(1, 1, 1)
-		btn.Font = Enum.Font.SourceSans
-		btn.TextSize = 16
-
-		btn.MouseButton1Click:Connect(function()
-			getgenv().selectedItemName = item.Name
-			print("✅ Đã chọn:", item.Name)
-		end)
-
-		y += 30
-	end
-
-	scroll.CanvasSize = UDim2.new(0, 0, 0, y)
+-- Tối ưu: Chỉ quét các object cần thiết
+local function scanWorkspace()
+    if tick() - lastUpdate < UPDATE_INTERVAL then
+        return cachedItems
+    end
+    
+    cachedItems = {}
+    local added = {}
+    
+    -- Chỉ quét các container chính thay vì toàn bộ workspace
+    local containers = {workspace}
+    
+    for _, container in ipairs(containers) do
+        for _, item in ipairs(container:GetChildren()) do
+            -- Chỉ quét 2 level để tránh lag
+            local function scanItem(obj, depth)
+                if depth > 2 then return end
+                
+                if obj:IsA("BasePart") or obj:IsA("Model") then
+                    if isWhitelisted(obj.Name) and not isBlacklisted(obj) and not added[obj.Name] then
+                        table.insert(cachedItems, obj.Name)
+                        added[obj.Name] = true
+                    end
+                end
+                
+                for _, child in ipairs(obj:GetChildren()) do
+                    scanItem(child, depth + 1)
+                end
+            end
+            
+            scanItem(item, 0)
+        end
+    end
+    
+    lastUpdate = tick()
+    return cachedItems
 end
 
--- Set PrimaryPart nếu cần
-local function trySetPrimary(model)
-	if not model.PrimaryPart then
-		for _, p in ipairs(model:GetDescendants()) do
-			if p:IsA("BasePart") then
-				pcall(function() model.PrimaryPart = p end)
-				break
-			end
-		end
-	end
+-- Cập nhật dropdown với debounce
+local function updateDropdown()
+    if isProcessing then return end
+    isProcessing = true
+    
+    local options = scanWorkspace()
+    
+    task.spawn(function()
+        Dropdown:Refresh(options, true)
+        task.wait(0.1)
+        isProcessing = false
+    end)
 end
 
--- Bring logic
+-- Nút làm mới
+BringTab:CreateButton({
+    Name = "🔄 Làm mới danh sách",
+    Callback = function()
+        if isProcessing then 
+            print("⏳ Đang xử lý, vui lòng chờ...")
+            return 
+        end
+        
+        print("🔄 Đang tải whitelist...")
+        if loadWhitelist() then
+            buildWhitelistDict()
+            lastUpdate = 0 -- Force update
+            updateDropdown()
+            print("✅ Đã làm mới danh sách")
+        else
+            print("❌ Không thể làm mới danh sách")
+        end
+    end
+})
+
+-- Hàm bring tối ưu
 local function bringItems()
-	local name = getgenv().selectedItemName
-	local hrp = char:FindFirstChild("HumanoidRootPart")
-	if not name or not hrp then return end
-	local targetPos = hrp.Position + Vector3.new(0, 10, 0)
-
-	for _, item in ipairs(workspace:GetDescendants()) do
-		if item.Name ~= name then continue end
-		if not (item:IsA("BasePart") or item:IsA("Model")) then continue end
-		if isBlacklisted(item) then continue end
-
-		local model = item:IsA("Model") and item or item:FindFirstAncestorOfClass("Model")
-		if item:IsA("BasePart") then
-			item.CFrame = CFrame.new(targetPos)
-			item.Anchored = false
-			item.CanCollide = true
-			task.delay(0.1, function()
-				pcall(function() item:SetNetworkOwner(plr) end)
-			end)
-		elseif model then
-			trySetPrimary(model)
-			if model.PrimaryPart then
-				model:SetPrimaryPartCFrame(CFrame.new(targetPos))
-				model.PrimaryPart.Anchored = false
-				model.PrimaryPart.CanCollide = true
-				task.delay(0.1, function()
-					pcall(function() model.PrimaryPart:SetNetworkOwner(plr) end)
-				end)
-			end
-		end
-	end
+    if isProcessing then 
+        print("⏳ Đang xử lý lệnh khác, vui lòng chờ...")
+        return 
+    end
+    
+    local name = getgenv().selectedItemName
+    if not name then 
+        print("❌ Vui lòng chọn vật thể trước")
+        return 
+    end
+    
+    -- Cập nhật character và HumanoidRootPart
+    Character = LocalPlayer.Character
+    if not Character then 
+        print("❌ Character không tồn tại")
+        return 
+    end
+    
+    HumanoidRootPart = Character:FindFirstChild("HumanoidRootPart")
+    if not HumanoidRootPart then 
+        print("❌ HumanoidRootPart không tồn tại")
+        return 
+    end
+    
+    isProcessing = true
+    local broughtCount = 0
+    
+    -- Tính toán vị trí bring
+    local basePos = HumanoidRootPart.Position + Vector3.new(0, getgenv().bringHeight, 0)
+    
+    -- Tìm và bring items với giới hạn số lượng
+    local maxItems = 10 -- Giới hạn để tránh lag
+    local processedItems = 0
+    
+    for _, item in ipairs(workspace:GetDescendants()) do
+        if processedItems >= maxItems then break end
+        
+        if item.Name ~= name then continue end
+        if not (item:IsA("BasePart") or item:IsA("Model")) then continue end
+        if isBlacklisted(item) then continue end
+        
+        -- Kiểm tra khoảng cách để tránh bring item quá xa
+        local itemPos = item:IsA("BasePart") and item.Position or (item.PrimaryPart and item.PrimaryPart.Position)
+        if itemPos and (itemPos - HumanoidRootPart.Position).Magnitude > 1000 then
+            continue
+        end
+        
+        processedItems = processedItems + 1
+        
+        -- Tính vị trí bring với offset để tránh chồng chéo
+        local offset = Vector3.new(
+            math.random(-getgenv().bringDistance, getgenv().bringDistance),
+            0,
+            math.random(-getgenv().bringDistance, getgenv().bringDistance)
+        )
+        local targetPos = basePos + offset
+        
+        -- Bring item
+        task.spawn(function()
+            pcall(function()
+                if item:IsA("BasePart") then
+                    item.CFrame = CFrame.new(targetPos)
+                    item.Anchored = false
+                    item.CanCollide = true
+                    
+                    -- Tối ưu network ownership
+                    task.wait(0.1)
+                    pcall(function()
+                        item:SetNetworkOwner(LocalPlayer)
+                    end)
+                    
+                elseif item:IsA("Model") then
+                    -- Tìm PrimaryPart nếu chưa có
+                    if not item.PrimaryPart then
+                        for _, part in ipairs(item:GetDescendants()) do
+                            if part:IsA("BasePart") then
+                                item.PrimaryPart = part
+                                break
+                            end
+                        end
+                    end
+                    
+                    if item.PrimaryPart then
+                        item:SetPrimaryPartCFrame(CFrame.new(targetPos))
+                        item.PrimaryPart.Anchored = false
+                        item.PrimaryPart.CanCollide = true
+                        
+                        -- Tối ưu network ownership
+                        task.wait(0.1)
+                        pcall(function()
+                            item.PrimaryPart:SetNetworkOwner(LocalPlayer)
+                        end)
+                    end
+                end
+                
+                broughtCount = broughtCount + 1
+            end)
+        end)
+    end
+    
+    -- Thông báo kết quả
+    task.wait(0.5)
+    print(string.format("✅ Đã bring %d item(s) '%s'", broughtCount, name))
+    isProcessing = false
 end
 
--- Nút
-refresh.MouseButton1Click:Connect(function()
-	loadWhitelist()
-	update()
+-- Nút bring chính
+BringTab:CreateButton({
+    Name = "📦 Bring vật thể",
+    Callback = bringItems
+})
+
+-- Nút bring tất cả (cho advanced users)
+BringTab:CreateButton({
+    Name = "🚀 Bring tất cả whitelist",
+    Callback = function()
+        if isProcessing then 
+            print("⏳ Đang xử lý lệnh khác, vui lòng chờ...")
+            return 
+        end
+        
+        print("🚀 Bắt đầu bring tất cả items...")
+        
+        for _, itemName in ipairs(cachedItems) do
+            getgenv().selectedItemName = itemName
+            bringItems()
+            task.wait(0.5) -- Delay để tránh lag
+        end
+    end
+})
+
+-- Toggle auto-update
+local AutoUpdate = SettingsTab:CreateToggle({
+    Name = "🔄 Tự động cập nhật",
+    CurrentValue = false,
+    Callback = function(value)
+        if value then
+            -- Bắt đầu auto-update
+            task.spawn(function()
+                while AutoUpdate.CurrentValue do
+                    task.wait(UPDATE_INTERVAL)
+                    if not isProcessing then
+                        updateDropdown()
+                    end
+                end
+            end)
+        end
+    end
+})
+
+-- Xử lý khi character respawn
+LocalPlayer.CharacterAdded:Connect(function(char)
+    Character = char
+    HumanoidRootPart = char:WaitForChild("HumanoidRootPart")
+    print("🔄 Character đã respawn")
 end)
 
-bring.MouseButton1Click:Connect(bringItems)
-searchBox:GetPropertyChangedSignal("Text"):Connect(update)
-
-update()
+-- Khởi chạy
+print("🚀 Đang khởi chạy Optimized Bring Tool...")
+if loadWhitelist() then
+    buildWhitelistDict()
+    updateDropdown()
+    print("✅ Script đã sẵn sàng!")
+else
+    print("⚠️ Không thể tải whitelist, một số chức năng có thể không hoạt động")
+end

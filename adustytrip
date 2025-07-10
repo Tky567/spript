@@ -1,4 +1,4 @@
--- 🚀 Optimized Bring Script with Rayfield UI
+-- 🚀 Optimized Bring Script with Rayfield UI (Fixed Nil Errors)
 -- Tối ưu hiệu suất, giảm lag, xử lý lỗi tốt hơn
 
 local WHITELIST_URL = "https://raw.githubusercontent.com/Tky567/script/refs/heads/Script/whitelist-note.txt"
@@ -9,32 +9,86 @@ local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
 
--- Variables
+-- Safe Variables with nil checks
 local LocalPlayer = Players.LocalPlayer
-local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
-local HumanoidRootPart = Character:WaitForChild("HumanoidRootPart")
+if not LocalPlayer then
+    warn("❌ LocalPlayer không tồn tại")
+    return
+end
+
+-- Wait for character safely
+local function waitForCharacter()
+    local character = LocalPlayer.Character
+    if not character then
+        character = LocalPlayer.CharacterAdded:Wait()
+    end
+    return character
+end
+
+-- Safe initialization
+local Character = waitForCharacter()
+local HumanoidRootPart
+
+-- Function to safely get HumanoidRootPart
+local function getHumanoidRootPart()
+    if not Character then
+        Character = waitForCharacter()
+    end
+    
+    if Character then
+        HumanoidRootPart = Character:FindFirstChild("HumanoidRootPart")
+        if not HumanoidRootPart then
+            HumanoidRootPart = Character:WaitForChild("HumanoidRootPart", 10)
+        end
+    end
+    
+    return HumanoidRootPart
+end
+
+-- Initialize HumanoidRootPart safely
+HumanoidRootPart = getHumanoidRootPart()
 
 local whitelist = {}
 local cachedItems = {}
 local lastUpdate = 0
 local isProcessing = false
 
+-- Safe HTTP request with retry mechanism
+local function safeHttpGet(url, maxRetries)
+    maxRetries = maxRetries or 3
+    local retries = 0
+    
+    while retries < maxRetries do
+        local success, result = pcall(function()
+            return game:HttpGet(url)
+        end)
+        
+        if success then
+            return result
+        else
+            retries = retries + 1
+            warn("🔄 Retry HTTP request (" .. retries .. "/" .. maxRetries .. "): " .. tostring(result))
+            task.wait(1)
+        end
+    end
+    
+    return nil
+end
+
 -- Tải whitelist từ URL với error handling
 local function loadWhitelist()
-    local success, result = pcall(function()
-        local res = game:HttpGet(WHITELIST_URL)
-        whitelist = {}
-        for line in res:gmatch("[^\r\n]+") do
-            local trimmed = line:match("^%s*(.-)%s*$") -- Trim whitespace
-            if trimmed and trimmed ~= "" then
-                table.insert(whitelist, trimmed:lower())
-            end
-        end
-    end)
-    
-    if not success then
-        warn("⚠️ Không thể tải whitelist:", result)
+    local result = safeHttpGet(WHITELIST_URL)
+    if not result then
+        warn("⚠️ Không thể tải whitelist sau nhiều lần thử")
         return false
+    end
+    
+    whitelist = {}
+    for line in result:gmatch("[^\r\n]+") do
+        local trimmed = line:match("^%s*(.-)%s*$") -- Trim whitespace
+        if trimmed and trimmed ~= "" then
+            table.insert(whitelist, trimmed:lower())
+        end
     end
     
     print("✅ Đã tải whitelist thành công:", #whitelist, "items")
@@ -51,10 +105,12 @@ local function buildWhitelistDict()
 end
 
 local function isWhitelisted(name)
+    if not name then return false end
     return whitelistDict[name:lower()] or false
 end
 
 local function isBlacklisted(item)
+    if not item or not item.Name then return false end
     if item.Name ~= "engine" then return false end
     
     local van = workspace:FindFirstChild("van")
@@ -63,29 +119,34 @@ local function isBlacklisted(item)
     return (van and item:IsDescendantOf(van)) or (sedan and item:IsDescendantOf(sedan))
 end
 
--- Tải Rayfield với error handling
+-- Safe Rayfield loading
 local function loadRayfield()
-    local success, Rayfield = pcall(function()
-        return loadstring(game:HttpGet("https://raw.githubusercontent.com/linhmcfake/LuaLibrary/refs/heads/main/RayField.lua"))()
+    local success, result = pcall(function()
+        local rayfield = safeHttpGet("https://raw.githubusercontent.com/linhmcfake/LuaLibrary/refs/heads/main/RayField.lua")
+        if rayfield then
+            return loadstring(rayfield)()
+        end
+        return nil
     end)
     
-    if not success then
-        warn("⚠️ Không thể tải Rayfield UI:", Rayfield)
+    if not success or not result then
+        warn("⚠️ Không thể tải Rayfield UI:", result)
         return nil
     end
     
-    return Rayfield
+    return result
 end
 
 -- Load Rayfield
 local Rayfield = loadRayfield()
 if not Rayfield then
+    warn("❌ Không thể khởi chạy GUI")
     return
 end
 
--- Tạo GUI
+-- Tạo GUI với safe checks
 local Window = Rayfield:CreateWindow({
-    Name = "🚀 Optimized Bring Tool",
+    Name = "🚀 Optimized Bring Tool (Fixed)",
     LoadingTitle = "Đang tải...",
     LoadingSubtitle = "Vui lòng chờ...",
     ConfigurationSaving = {
@@ -96,7 +157,7 @@ local Window = Rayfield:CreateWindow({
 local BringTab = Window:CreateTab("📦 Bring", 4483362458)
 local SettingsTab = Window:CreateTab("⚙️ Cài đặt", 4483362458)
 
--- Biến global
+-- Biến global với safe defaults
 getgenv().selectedItemName = nil
 getgenv().bringDistance = 10
 getgenv().bringHeight = 5
@@ -107,8 +168,10 @@ local Dropdown = BringTab:CreateDropdown({
     Options = {},
     CurrentOption = nil,
     Callback = function(option)
-        getgenv().selectedItemName = option
-        print("✅ Đã chọn:", option)
+        if option then
+            getgenv().selectedItemName = option
+            print("✅ Đã chọn:", option)
+        end
     end
 })
 
@@ -120,7 +183,9 @@ local DistanceSlider = SettingsTab:CreateSlider({
     Suffix = "studs",
     CurrentValue = 10,
     Callback = function(value)
-        getgenv().bringDistance = value
+        if value then
+            getgenv().bringDistance = value
+        end
     end
 })
 
@@ -132,11 +197,13 @@ local HeightSlider = SettingsTab:CreateSlider({
     Suffix = "studs",
     CurrentValue = 5,
     Callback = function(value)
-        getgenv().bringHeight = value
+        if value then
+            getgenv().bringHeight = value
+        end
     end
 })
 
--- Tối ưu: Chỉ quét các object cần thiết
+-- Safe workspace scanning
 local function scanWorkspace()
     if tick() - lastUpdate < UPDATE_INTERVAL then
         return cachedItems
@@ -145,24 +212,48 @@ local function scanWorkspace()
     cachedItems = {}
     local added = {}
     
+    -- Safe workspace check
+    if not workspace then
+        warn("❌ Workspace không tồn tại")
+        return cachedItems
+    end
+    
     -- Chỉ quét các container chính thay vì toàn bộ workspace
     local containers = {workspace}
     
     for _, container in ipairs(containers) do
-        for _, item in ipairs(container:GetChildren()) do
+        if not container then continue end
+        
+        local success, children = pcall(function()
+            return container:GetChildren()
+        end)
+        
+        if not success then continue end
+        
+        for _, item in ipairs(children) do
+            if not item then continue end
+            
             -- Chỉ quét 2 level để tránh lag
             local function scanItem(obj, depth)
-                if depth > 2 then return end
+                if depth > 2 or not obj then return end
                 
-                if obj:IsA("BasePart") or obj:IsA("Model") then
-                    if isWhitelisted(obj.Name) and not isBlacklisted(obj) and not added[obj.Name] then
-                        table.insert(cachedItems, obj.Name)
-                        added[obj.Name] = true
+                local success, _ = pcall(function()
+                    if obj:IsA("BasePart") or obj:IsA("Model") then
+                        if obj.Name and isWhitelisted(obj.Name) and not isBlacklisted(obj) and not added[obj.Name] then
+                            table.insert(cachedItems, obj.Name)
+                            added[obj.Name] = true
+                        end
                     end
-                end
+                    
+                    local children = obj:GetChildren()
+                    for _, child in ipairs(children) do
+                        scanItem(child, depth + 1)
+                    end
+                end)
                 
-                for _, child in ipairs(obj:GetChildren()) do
-                    scanItem(child, depth + 1)
+                if not success then
+                    -- Silently skip errored items
+                    return
                 end
             end
             
@@ -174,15 +265,25 @@ local function scanWorkspace()
     return cachedItems
 end
 
--- Cập nhật dropdown với debounce
+-- Safe dropdown update
 local function updateDropdown()
     if isProcessing then return end
     isProcessing = true
     
-    local options = scanWorkspace()
+    local success, options = pcall(function()
+        return scanWorkspace()
+    end)
+    
+    if not success then
+        warn("⚠️ Lỗi khi quét workspace:", options)
+        isProcessing = false
+        return
+    end
     
     task.spawn(function()
-        Dropdown:Refresh(options, true)
+        pcall(function()
+            Dropdown:Refresh(options, true)
+        end)
         task.wait(0.1)
         isProcessing = false
     end)
@@ -209,7 +310,7 @@ BringTab:CreateButton({
     end
 })
 
--- Hàm bring tối ưu
+-- Safe bring function
 local function bringItems()
     if isProcessing then 
         print("⏳ Đang xử lý lệnh khác, vui lòng chờ...")
@@ -222,45 +323,60 @@ local function bringItems()
         return 
     end
     
-    -- Cập nhật character và HumanoidRootPart
-    Character = LocalPlayer.Character
-    if not Character then 
-        print("❌ Character không tồn tại")
-        return 
-    end
-    
-    HumanoidRootPart = Character:FindFirstChild("HumanoidRootPart")
-    if not HumanoidRootPart then 
-        print("❌ HumanoidRootPart không tồn tại")
+    -- Safe character and HumanoidRootPart update
+    local currentHRP = getHumanoidRootPart()
+    if not currentHRP then 
+        print("❌ Character hoặc HumanoidRootPart không tồn tại")
         return 
     end
     
     isProcessing = true
     local broughtCount = 0
     
-    -- Tính toán vị trí bring
-    local basePos = HumanoidRootPart.Position + Vector3.new(0, getgenv().bringHeight, 0)
+    -- Safe position calculation
+    local success, basePos = pcall(function()
+        return currentHRP.Position + Vector3.new(0, getgenv().bringHeight, 0)
+    end)
+    
+    if not success then
+        print("❌ Không thể tính toán vị trí bring")
+        isProcessing = false
+        return
+    end
     
     -- Tìm và bring items với giới hạn số lượng
     local maxItems = 10 -- Giới hạn để tránh lag
     local processedItems = 0
     
-    for _, item in ipairs(workspace:GetDescendants()) do
+    local success, descendants = pcall(function()
+        return workspace:GetDescendants()
+    end)
+    
+    if not success then
+        print("❌ Không thể quét workspace")
+        isProcessing = false
+        return
+    end
+    
+    for _, item in ipairs(descendants) do
         if processedItems >= maxItems then break end
-        
+        if not item or not item.Name then continue end
         if item.Name ~= name then continue end
         if not (item:IsA("BasePart") or item:IsA("Model")) then continue end
         if isBlacklisted(item) then continue end
         
-        -- Kiểm tra khoảng cách để tránh bring item quá xa
-        local itemPos = item:IsA("BasePart") and item.Position or (item.PrimaryPart and item.PrimaryPart.Position)
-        if itemPos and (itemPos - HumanoidRootPart.Position).Magnitude > 1000 then
+        -- Safe distance check
+        local success, itemPos = pcall(function()
+            return item:IsA("BasePart") and item.Position or (item.PrimaryPart and item.PrimaryPart.Position)
+        end)
+        
+        if success and itemPos and (itemPos - currentHRP.Position).Magnitude > 1000 then
             continue
         end
         
         processedItems = processedItems + 1
         
-        -- Tính vị trí bring với offset để tránh chồng chéo
+        -- Safe position calculation with offset
         local offset = Vector3.new(
             math.random(-getgenv().bringDistance, getgenv().bringDistance),
             0,
@@ -268,24 +384,27 @@ local function bringItems()
         )
         local targetPos = basePos + offset
         
-        -- Bring item
+        -- Safe bring item
         task.spawn(function()
-            pcall(function()
+            local success, _ = pcall(function()
                 if item:IsA("BasePart") then
                     item.CFrame = CFrame.new(targetPos)
                     item.Anchored = false
                     item.CanCollide = true
                     
-                    -- Tối ưu network ownership
+                    -- Safe network ownership
                     task.wait(0.1)
                     pcall(function()
-                        item:SetNetworkOwner(LocalPlayer)
+                        if LocalPlayer and LocalPlayer.UserId then
+                            item:SetNetworkOwner(LocalPlayer)
+                        end
                     end)
                     
                 elseif item:IsA("Model") then
-                    -- Tìm PrimaryPart nếu chưa có
+                    -- Safe PrimaryPart handling
                     if not item.PrimaryPart then
-                        for _, part in ipairs(item:GetDescendants()) do
+                        local descendants = item:GetDescendants()
+                        for _, part in ipairs(descendants) do
                             if part:IsA("BasePart") then
                                 item.PrimaryPart = part
                                 break
@@ -298,20 +417,26 @@ local function bringItems()
                         item.PrimaryPart.Anchored = false
                         item.PrimaryPart.CanCollide = true
                         
-                        -- Tối ưu network ownership
+                        -- Safe network ownership
                         task.wait(0.1)
                         pcall(function()
-                            item.PrimaryPart:SetNetworkOwner(LocalPlayer)
+                            if LocalPlayer and LocalPlayer.UserId then
+                                item.PrimaryPart:SetNetworkOwner(LocalPlayer)
+                            end
                         end)
                     end
                 end
                 
                 broughtCount = broughtCount + 1
             end)
+            
+            if not success then
+                warn("⚠️ Lỗi khi bring item:", item.Name)
+            end
         end)
     end
     
-    -- Thông báo kết quả
+    -- Safe result notification
     task.wait(0.5)
     print(string.format("✅ Đã bring %d item(s) '%s'", broughtCount, name))
     isProcessing = false
@@ -323,7 +448,7 @@ BringTab:CreateButton({
     Callback = bringItems
 })
 
--- Nút bring tất cả (cho advanced users)
+-- Safe bring all function
 BringTab:CreateButton({
     Name = "🚀 Bring tất cả whitelist",
     Callback = function()
@@ -335,6 +460,8 @@ BringTab:CreateButton({
         print("🚀 Bắt đầu bring tất cả items...")
         
         for _, itemName in ipairs(cachedItems) do
+            if not itemName then continue end
+            
             getgenv().selectedItemName = itemName
             bringItems()
             task.wait(0.5) -- Delay để tránh lag
@@ -361,14 +488,22 @@ local AutoUpdate = SettingsTab:CreateToggle({
     end
 })
 
--- Xử lý khi character respawn
+-- Safe character respawn handling
 LocalPlayer.CharacterAdded:Connect(function(char)
+    if not char then return end
+    
     Character = char
-    HumanoidRootPart = char:WaitForChild("HumanoidRootPart")
-    print("🔄 Character đã respawn")
+    task.spawn(function()
+        HumanoidRootPart = char:WaitForChild("HumanoidRootPart", 10)
+        if HumanoidRootPart then
+            print("🔄 Character đã respawn")
+        else
+            warn("⚠️ Không thể tìm HumanoidRootPart sau respawn")
+        end
+    end)
 end)
 
--- Khởi chạy
+-- Safe initialization
 print("🚀 Đang khởi chạy Optimized Bring Tool...")
 if loadWhitelist() then
     buildWhitelistDict()

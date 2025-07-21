@@ -60,3 +60,7 @@ brick
 ironboard
 skateboard
 beam
+barrel
+Glassbottle
+woodplanmks
+Metalsheet

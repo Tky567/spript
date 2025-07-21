@@ -1,514 +1,130 @@
--- 🚀 Optimized Bring Script with Rayfield UI (Fixed Nil Errors)
--- Tối ưu hiệu suất, giảm lag, xử lý lỗi tốt hơn
-
-local WHITELIST_URL = "https://raw.githubusercontent.com/Tky567/script/refs/heads/Script/whitelist-note.txt"
-local UPDATE_INTERVAL = 5 -- Cập nhật dropdown mỗi 5 giây thay vì liên tục
-
--- Services
 local Players = game:GetService("Players")
-local RunService = game:GetService("RunService")
-local TweenService = game:GetService("TweenService")
-
--- Safe Variables with nil checks
 local LocalPlayer = Players.LocalPlayer
-if not LocalPlayer then
-    warn("❌ LocalPlayer không tồn tại")
-    return
+
+local gui = Instance.new("ScreenGui", game.CoreGui)
+gui.Name = "BringUI"
+
+local frame = Instance.new("Frame", gui)
+frame.Size = UDim2.new(0, 300, 0, 450)
+frame.Position = UDim2.new(0, 100, 0, 100)
+frame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+frame.Active = true
+frame.Draggable = true
+
+local title = Instance.new("TextLabel", frame)
+title.Text = "🎯 Bring Items (contains 'chance')"
+title.Size = UDim2.new(1, 0, 0, 30)
+title.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+title.TextColor3 = Color3.new(1,1,1)
+title.TextScaled = true
+
+local refreshBtn = Instance.new("TextButton", frame)
+refreshBtn.Text = "🔄 Làm mới"
+refreshBtn.Position = UDim2.new(0, 5, 0, 35)
+refreshBtn.Size = UDim2.new(0, 140, 0, 30)
+refreshBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+refreshBtn.TextColor3 = Color3.new(1,1,1)
+
+local bringBtn = Instance.new("TextButton", frame)
+bringBtn.Text = "📦 Bring"
+bringBtn.Position = UDim2.new(0, 155, 0, 35)
+bringBtn.Size = UDim2.new(0, 140, 0, 30)
+bringBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+bringBtn.TextColor3 = Color3.new(1,1,1)
+
+local selectedBox = Instance.new("TextBox", frame)
+selectedBox.Position = UDim2.new(0, 5, 0, 75)
+selectedBox.Size = UDim2.new(1, -10, 0, 30)
+selectedBox.PlaceholderText = "Tên vật thể..."
+selectedBox.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+selectedBox.TextColor3 = Color3.new(1,1,1)
+selectedBox.Text = ""
+
+local scroll = Instance.new("ScrollingFrame", frame)
+scroll.Position = UDim2.new(0, 5, 0, 115)
+scroll.Size = UDim2.new(1, -10, 1, -120)
+scroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+scroll.ScrollBarThickness = 6
+scroll.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+scroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
+
+local layout = Instance.new("UIListLayout", scroll)
+layout.SortOrder = Enum.SortOrder.LayoutOrder
+layout.Padding = UDim.new(0, 2)
+
+local objectList = {}
+
+local function hasChanceAny(obj)
+	for _, v in ipairs(obj:GetDescendants()) do
+		if v.Name:lower() == "chance" then
+			return true
+		end
+	end
+	return false
 end
 
--- Wait for character safely
-local function waitForCharacter()
-    local character = LocalPlayer.Character
-    if not character then
-        character = LocalPlayer.CharacterAdded:Wait()
-    end
-    return character
+local function addObjectButton(name)
+	local btn = Instance.new("TextButton")
+	btn.Size = UDim2.new(1, -10, 0, 25)
+	btn.Text = name
+	btn.BackgroundColor3 = Color3.fromRGB(70, 70, 70)
+	btn.TextColor3 = Color3.new(1, 1, 1)
+	btn.Parent = scroll
+	btn.MouseButton1Click:Connect(function()
+		selectedBox.Text = name
+	end)
 end
 
--- Safe initialization
-local Character = waitForCharacter()
-local HumanoidRootPart
+local function refreshList()
+	scroll:ClearAllChildren()
+	layout.Parent = scroll
+	objectList = {}
+	local unique = {}
 
--- Function to safely get HumanoidRootPart
-local function getHumanoidRootPart()
-    if not Character then
-        Character = waitForCharacter()
-    end
-    
-    if Character then
-        HumanoidRootPart = Character:FindFirstChild("HumanoidRootPart")
-        if not HumanoidRootPart then
-            HumanoidRootPart = Character:WaitForChild("HumanoidRootPart", 10)
-        end
-    end
-    
-    return HumanoidRootPart
+	for _, obj in ipairs(workspace:GetDescendants()) do
+		if (obj:IsA("Model") or obj:IsA("BasePart")) and not unique[obj.Name] then
+			if hasChanceAny(obj) then
+				unique[obj.Name] = true
+				table.insert(objectList, obj.Name)
+				addObjectButton(obj.Name)
+			end
+		end
+	end
 end
 
--- Initialize HumanoidRootPart safely
-HumanoidRootPart = getHumanoidRootPart()
-
-local whitelist = {}
-local cachedItems = {}
-local lastUpdate = 0
-local isProcessing = false
-
--- Safe HTTP request with retry mechanism
-local function safeHttpGet(url, maxRetries)
-    maxRetries = maxRetries or 3
-    local retries = 0
-    
-    while retries < maxRetries do
-        local success, result = pcall(function()
-            return game:HttpGet(url)
-        end)
-        
-        if success then
-            return result
-        else
-            retries = retries + 1
-            warn("🔄 Retry HTTP request (" .. retries .. "/" .. maxRetries .. "): " .. tostring(result))
-            task.wait(1)
-        end
-    end
-    
-    return nil
+local function bringItem(name)
+	for _, obj in ipairs(workspace:GetDescendants()) do
+		if obj.Name == name and (obj:IsA("Model") or obj:IsA("BasePart")) then
+			local root = obj:IsA("Model") and obj.PrimaryPart or obj
+			if not root and obj:IsA("Model") then
+				for _, part in ipairs(obj:GetDescendants()) do
+					if part:IsA("BasePart") then
+						obj.PrimaryPart = part
+						root = part
+						break
+					end
+				end
+			end
+			if root then
+				obj:SetPrimaryPartCFrame(LocalPlayer.Character.HumanoidRootPart.CFrame * CFrame.new(0, 5, 0))
+				task.wait(0.2)
+				for _, part in ipairs(obj:GetDescendants()) do
+					if part:IsA("BasePart") then
+						part.Anchored = false
+						part.CanCollide = true
+						part:SetNetworkOwner(LocalPlayer)
+					end
+				end
+			end
+		end
+	end
 end
 
--- Tải whitelist từ URL với error handling
-local function loadWhitelist()
-    local result = safeHttpGet(WHITELIST_URL)
-    if not result then
-        warn("⚠️ Không thể tải whitelist sau nhiều lần thử")
-        return false
-    end
-    
-    whitelist = {}
-    for line in result:gmatch("[^\r\n]+") do
-        local trimmed = line:match("^%s*(.-)%s*$") -- Trim whitespace
-        if trimmed and trimmed ~= "" then
-            table.insert(whitelist, trimmed:lower())
-        end
-    end
-    
-    print("✅ Đã tải whitelist thành công:", #whitelist, "items")
-    return true
-end
-
--- Kiểm tra whitelist nhanh hơn bằng dictionary
-local whitelistDict = {}
-local function buildWhitelistDict()
-    whitelistDict = {}
-    for _, name in ipairs(whitelist) do
-        whitelistDict[name] = true
-    end
-end
-
-local function isWhitelisted(name)
-    if not name then return false end
-    return whitelistDict[name:lower()] or false
-end
-
-local function isBlacklisted(item)
-    if not item or not item.Name then return false end
-    if item.Name ~= "engine" then return false end
-    
-    local van = workspace:FindFirstChild("van")
-    local sedan = workspace:FindFirstChild("sedan")
-    
-    return (van and item:IsDescendantOf(van)) or (sedan and item:IsDescendantOf(sedan))
-end
-
--- Safe Rayfield loading
-local function loadRayfield()
-    local success, result = pcall(function()
-        local rayfield = safeHttpGet("https://raw.githubusercontent.com/linhmcfake/LuaLibrary/refs/heads/main/RayField.lua")
-        if rayfield then
-            return loadstring(rayfield)()
-        end
-        return nil
-    end)
-    
-    if not success or not result then
-        warn("⚠️ Không thể tải Rayfield UI:", result)
-        return nil
-    end
-    
-    return result
-end
-
--- Load Rayfield
-local Rayfield = loadRayfield()
-if not Rayfield then
-    warn("❌ Không thể khởi chạy GUI")
-    return
-end
-
--- Tạo GUI với safe checks
-local Window = Rayfield:CreateWindow({
-    Name = "🚀 Optimized Bring Tool (Fixed)",
-    LoadingTitle = "Đang tải...",
-    LoadingSubtitle = "Vui lòng chờ...",
-    ConfigurationSaving = {
-        Enabled = false
-    }
-})
-
-local BringTab = Window:CreateTab("📦 Bring", 4483362458)
-local SettingsTab = Window:CreateTab("⚙️ Cài đặt", 4483362458)
-
--- Biến global với safe defaults
-getgenv().selectedItemName = nil
-getgenv().bringDistance = 10
-getgenv().bringHeight = 5
-
--- Dropdown cho vật thể
-local Dropdown = BringTab:CreateDropdown({
-    Name = "🎯 Chọn vật thể",
-    Options = {},
-    CurrentOption = nil,
-    Callback = function(option)
-        if option then
-            getgenv().selectedItemName = option
-            print("✅ Đã chọn:", option)
-        end
-    end
-})
-
--- Slider cho khoảng cách
-local DistanceSlider = SettingsTab:CreateSlider({
-    Name = "📏 Khoảng cách bring",
-    Range = {5, 50},
-    Increment = 1,
-    Suffix = "studs",
-    CurrentValue = 10,
-    Callback = function(value)
-        if value then
-            getgenv().bringDistance = value
-        end
-    end
-})
-
--- Slider cho độ cao
-local HeightSlider = SettingsTab:CreateSlider({
-    Name = "📐 Độ cao bring",
-    Range = {0, 20},
-    Increment = 1,
-    Suffix = "studs",
-    CurrentValue = 5,
-    Callback = function(value)
-        if value then
-            getgenv().bringHeight = value
-        end
-    end
-})
-
--- Safe workspace scanning
-local function scanWorkspace()
-    if tick() - lastUpdate < UPDATE_INTERVAL then
-        return cachedItems
-    end
-    
-    cachedItems = {}
-    local added = {}
-    
-    -- Safe workspace check
-    if not workspace then
-        warn("❌ Workspace không tồn tại")
-        return cachedItems
-    end
-    
-    -- Chỉ quét các container chính thay vì toàn bộ workspace
-    local containers = {workspace}
-    
-    for _, container in ipairs(containers) do
-        if not container then continue end
-        
-        local success, children = pcall(function()
-            return container:GetChildren()
-        end)
-        
-        if not success then continue end
-        
-        for _, item in ipairs(children) do
-            if not item then continue end
-            
-            -- Chỉ quét 2 level để tránh lag
-            local function scanItem(obj, depth)
-                if depth > 2 or not obj then return end
-                
-                local success, _ = pcall(function()
-                    if obj:IsA("BasePart") or obj:IsA("Model") then
-                        if obj.Name and isWhitelisted(obj.Name) and not isBlacklisted(obj) and not added[obj.Name] then
-                            table.insert(cachedItems, obj.Name)
-                            added[obj.Name] = true
-                        end
-                    end
-                    
-                    local children = obj:GetChildren()
-                    for _, child in ipairs(children) do
-                        scanItem(child, depth + 1)
-                    end
-                end)
-                
-                if not success then
-                    -- Silently skip errored items
-                    return
-                end
-            end
-            
-            scanItem(item, 0)
-        end
-    end
-    
-    lastUpdate = tick()
-    return cachedItems
-end
-
--- Safe dropdown update
-local function updateDropdown()
-    if isProcessing then return end
-    isProcessing = true
-    
-    local success, options = pcall(function()
-        return scanWorkspace()
-    end)
-    
-    if not success then
-        warn("⚠️ Lỗi khi quét workspace:", options)
-        isProcessing = false
-        return
-    end
-    
-    task.spawn(function()
-        pcall(function()
-            Dropdown:Refresh(options, true)
-        end)
-        task.wait(0.1)
-        isProcessing = false
-    end)
-end
-
--- Nút làm mới
-BringTab:CreateButton({
-    Name = "🔄 Làm mới danh sách",
-    Callback = function()
-        if isProcessing then 
-            print("⏳ Đang xử lý, vui lòng chờ...")
-            return 
-        end
-        
-        print("🔄 Đang tải whitelist...")
-        if loadWhitelist() then
-            buildWhitelistDict()
-            lastUpdate = 0 -- Force update
-            updateDropdown()
-            print("✅ Đã làm mới danh sách")
-        else
-            print("❌ Không thể làm mới danh sách")
-        end
-    end
-})
-
--- Safe bring function
-local function bringItems()
-    if isProcessing then 
-        print("⏳ Đang xử lý lệnh khác, vui lòng chờ...")
-        return 
-    end
-    
-    local name = getgenv().selectedItemName
-    if not name then 
-        print("❌ Vui lòng chọn vật thể trước")
-        return 
-    end
-    
-    -- Safe character and HumanoidRootPart update
-    local currentHRP = getHumanoidRootPart()
-    if not currentHRP then 
-        print("❌ Character hoặc HumanoidRootPart không tồn tại")
-        return 
-    end
-    
-    isProcessing = true
-    local broughtCount = 0
-    
-    -- Safe position calculation
-    local success, basePos = pcall(function()
-        return currentHRP.Position + Vector3.new(0, getgenv().bringHeight, 0)
-    end)
-    
-    if not success then
-        print("❌ Không thể tính toán vị trí bring")
-        isProcessing = false
-        return
-    end
-    
-    -- Tìm và bring items với giới hạn số lượng
-    local maxItems = 10 -- Giới hạn để tránh lag
-    local processedItems = 0
-    
-    local success, descendants = pcall(function()
-        return workspace:GetDescendants()
-    end)
-    
-    if not success then
-        print("❌ Không thể quét workspace")
-        isProcessing = false
-        return
-    end
-    
-    for _, item in ipairs(descendants) do
-        if processedItems >= maxItems then break end
-        if not item or not item.Name then continue end
-        if item.Name ~= name then continue end
-        if not (item:IsA("BasePart") or item:IsA("Model")) then continue end
-        if isBlacklisted(item) then continue end
-        
-        -- Safe distance check
-        local success, itemPos = pcall(function()
-            return item:IsA("BasePart") and item.Position or (item.PrimaryPart and item.PrimaryPart.Position)
-        end)
-        
-        if success and itemPos and (itemPos - currentHRP.Position).Magnitude > 1000 then
-            continue
-        end
-        
-        processedItems = processedItems + 1
-        
-        -- Safe position calculation with offset
-        local offset = Vector3.new(
-            math.random(-getgenv().bringDistance, getgenv().bringDistance),
-            0,
-            math.random(-getgenv().bringDistance, getgenv().bringDistance)
-        )
-        local targetPos = basePos + offset
-        
-        -- Safe bring item
-        task.spawn(function()
-            local success, _ = pcall(function()
-                if item:IsA("BasePart") then
-                    item.CFrame = CFrame.new(targetPos)
-                    item.Anchored = false
-                    item.CanCollide = true
-                    
-                    -- Safe network ownership
-                    task.wait(0.1)
-                    pcall(function()
-                        if LocalPlayer and LocalPlayer.UserId then
-                            item:SetNetworkOwner(LocalPlayer)
-                        end
-                    end)
-                    
-                elseif item:IsA("Model") then
-                    -- Safe PrimaryPart handling
-                    if not item.PrimaryPart then
-                        local descendants = item:GetDescendants()
-                        for _, part in ipairs(descendants) do
-                            if part:IsA("BasePart") then
-                                item.PrimaryPart = part
-                                break
-                            end
-                        end
-                    end
-                    
-                    if item.PrimaryPart then
-                        item:SetPrimaryPartCFrame(CFrame.new(targetPos))
-                        item.PrimaryPart.Anchored = false
-                        item.PrimaryPart.CanCollide = true
-                        
-                        -- Safe network ownership
-                        task.wait(0.1)
-                        pcall(function()
-                            if LocalPlayer and LocalPlayer.UserId then
-                                item.PrimaryPart:SetNetworkOwner(LocalPlayer)
-                            end
-                        end)
-                    end
-                end
-                
-                broughtCount = broughtCount + 1
-            end)
-            
-            if not success then
-                warn("⚠️ Lỗi khi bring item:", item.Name)
-            end
-        end)
-    end
-    
-    -- Safe result notification
-    task.wait(0.5)
-    print(string.format("✅ Đã bring %d item(s) '%s'", broughtCount, name))
-    isProcessing = false
-end
-
--- Nút bring chính
-BringTab:CreateButton({
-    Name = "📦 Bring vật thể",
-    Callback = bringItems
-})
-
--- Safe bring all function
-BringTab:CreateButton({
-    Name = "🚀 Bring tất cả whitelist",
-    Callback = function()
-        if isProcessing then 
-            print("⏳ Đang xử lý lệnh khác, vui lòng chờ...")
-            return 
-        end
-        
-        print("🚀 Bắt đầu bring tất cả items...")
-        
-        for _, itemName in ipairs(cachedItems) do
-            if not itemName then continue end
-            
-            getgenv().selectedItemName = itemName
-            bringItems()
-            task.wait(0.5) -- Delay để tránh lag
-        end
-    end
-})
-
--- Toggle auto-update
-local AutoUpdate = SettingsTab:CreateToggle({
-    Name = "🔄 Tự động cập nhật",
-    CurrentValue = false,
-    Callback = function(value)
-        if value then
-            -- Bắt đầu auto-update
-            task.spawn(function()
-                while AutoUpdate.CurrentValue do
-                    task.wait(UPDATE_INTERVAL)
-                    if not isProcessing then
-                        updateDropdown()
-                    end
-                end
-            end)
-        end
-    end
-})
-
--- Safe character respawn handling
-LocalPlayer.CharacterAdded:Connect(function(char)
-    if not char then return end
-    
-    Character = char
-    task.spawn(function()
-        HumanoidRootPart = char:WaitForChild("HumanoidRootPart", 10)
-        if HumanoidRootPart then
-            print("🔄 Character đã respawn")
-        else
-            warn("⚠️ Không thể tìm HumanoidRootPart sau respawn")
-        end
-    end)
+refreshBtn.MouseButton1Click:Connect(refreshList)
+bringBtn.MouseButton1Click:Connect(function()
+	if selectedBox.Text ~= "" then
+		bringItem(selectedBox.Text)
+	end
 end)
 
--- Safe initialization
-print("🚀 Đang khởi chạy Optimized Bring Tool...")
-if loadWhitelist() then
-    buildWhitelistDict()
-    updateDropdown()
-    print("✅ Script đã sẵn sàng!")
-else
-    print("⚠️ Không thể tải whitelist, một số chức năng có thể không hoạt động")
-end
+refreshList()

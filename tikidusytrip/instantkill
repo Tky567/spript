@@ -1,0 +1,104 @@
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+
+local gui = Instance.new("ScreenGui", game.CoreGui)
+gui.Name = "KillNPC_UI"
+
+local frame = Instance.new("Frame", gui)
+frame.Size = UDim2.new(0, 300, 0, 400)
+frame.Position = UDim2.new(0, 200, 0, 150)
+frame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+frame.Active = true
+frame.Draggable = true
+
+local title = Instance.new("TextLabel", frame)
+title.Text = "☠️ Kill NPC with Humanoid"
+title.Size = UDim2.new(1, 0, 0, 30)
+title.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+title.TextColor3 = Color3.new(1,1,1)
+title.TextScaled = true
+
+local refreshBtn = Instance.new("TextButton", frame)
+refreshBtn.Text = "🔄 Làm mới"
+refreshBtn.Position = UDim2.new(0, 5, 0, 35)
+refreshBtn.Size = UDim2.new(0, 140, 0, 30)
+refreshBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+refreshBtn.TextColor3 = Color3.new(1,1,1)
+
+local killBtn = Instance.new("TextButton", frame)
+killBtn.Text = "☠️ Kill"
+killBtn.Position = UDim2.new(0, 155, 0, 35)
+killBtn.Size = UDim2.new(0, 140, 0, 30)
+killBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+killBtn.TextColor3 = Color3.new(1,1,1)
+
+local selectedBox = Instance.new("TextBox", frame)
+selectedBox.Position = UDim2.new(0, 5, 0, 75)
+selectedBox.Size = UDim2.new(1, -10, 0, 30)
+selectedBox.PlaceholderText = "Tên sinh vật..."
+selectedBox.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+selectedBox.TextColor3 = Color3.new(1,1,1)
+selectedBox.Text = ""
+
+local scroll = Instance.new("ScrollingFrame", frame)
+scroll.Position = UDim2.new(0, 5, 0, 115)
+scroll.Size = UDim2.new(1, -10, 1, -120)
+scroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+scroll.ScrollBarThickness = 6
+scroll.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+scroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
+
+local layout = Instance.new("UIListLayout", scroll)
+layout.SortOrder = Enum.SortOrder.LayoutOrder
+layout.Padding = UDim.new(0, 2)
+
+local npcList = {}
+
+local function addButton(name)
+	local btn = Instance.new("TextButton")
+	btn.Size = UDim2.new(1, -10, 0, 25)
+	btn.Text = name
+	btn.BackgroundColor3 = Color3.fromRGB(70, 70, 70)
+	btn.TextColor3 = Color3.new(1, 1, 1)
+	btn.Parent = scroll
+	btn.MouseButton1Click:Connect(function()
+		selectedBox.Text = name
+	end)
+end
+
+local function refreshList()
+	scroll:ClearAllChildren()
+	layout.Parent = scroll
+	npcList = {}
+	local unique = {}
+
+	for _, obj in ipairs(workspace:GetDescendants()) do
+		if obj:IsA("Model") and obj:FindFirstChildOfClass("Humanoid") then
+			if not unique[obj.Name] then
+				unique[obj.Name] = true
+				table.insert(npcList, obj.Name)
+				addButton(obj.Name)
+			end
+		end
+	end
+end
+
+local function killAll(name)
+	for _, obj in ipairs(workspace:GetDescendants()) do
+		if obj:IsA("Model") and obj.Name == name then
+			local hum = obj:FindFirstChildOfClass("Humanoid")
+			if hum then
+				hum.Health = 0
+			end
+		end
+	end
+end
+
+refreshBtn.MouseButton1Click:Connect(refreshList)
+killBtn.MouseButton1Click:Connect(function()
+	if selectedBox.Text ~= "" then
+		killAll(selectedBox.Text)
+	end
+end)
+
+refreshList()

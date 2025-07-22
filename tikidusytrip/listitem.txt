@@ -63,3 +63,7 @@ barrel
 Glassbottle
 woodplanmks
 Metalsheet
+fortune cookie
+Donut
+Glass of Milk 
+AntlerCookie

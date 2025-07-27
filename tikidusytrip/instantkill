@@ -1,80 +1,78 @@
---// Yêu cầu: Rayfield UI phải được cài đặt trong game (Rayfield.lua) //--
-local Rayfield = loadstring(game:HttpGet("https://sirius.menu/rayfield"))()
+-- Redz Library (tự tải)
+local RedzLib = loadstring(game:HttpGet("https://raw.githubusercontent.com/REDzHUB/UI-Library/main/Main.lua"))()
 
 local Players = game:GetService("Players")
-local RunService = game:GetService("RunService")
+local Workspace = game:GetService("Workspace")
 local LocalPlayer = Players.LocalPlayer
 local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+local HRP = Character:WaitForChild("HumanoidRootPart")
 
--- Tạo cửa sổ giao diện
-local Window = Rayfield:CreateWindow({
-    Name = "Auto Bring + Kill (Humanoid)",
-    ConfigurationSaving = {
-        Enabled = false
-    }
-})
+local window = RedzLib:CreateWindow("Bring System")
+local tab = window:CreateTab("Main")
 
--- Tạo tab điều khiển
-local MainTab = Window:CreateTab("Main", 4483362458)
+local itemList = {}
+local creatureList = {}
 
--- Hàm kiểm tra Humanoid
-local function hasHumanoid(model)
-    return model:FindFirstChildWhichIsA("Humanoid", true) ~= nil
-end
-
--- Bring về trước mặt
-local function bringToFront(model)
-    local root = Character:FindFirstChild("HumanoidRootPart")
-    if root and model:IsA("Model") and model.PrimaryPart then
-        model:SetPrimaryPartCFrame(root.CFrame * CFrame.new(0, 0, -5))
-        -- Gán ownership
-        for _, part in ipairs(model:GetDescendants()) do
-            if part:IsA("BasePart") then
-                part.Anchored = false
-                part.CanCollide = true
-                part:SetNetworkOwner(LocalPlayer)
+-- Làm mới danh sách
+local function refreshList()
+    itemList = {}
+    creatureList = {}
+    for _, v in ipairs(Workspace:GetDescendants()) do
+        if v:IsA("Model") and not Players:GetPlayerFromCharacter(v) then
+            if v:FindFirstChildOfClass("Humanoid") then
+                creatureList[v.Name] = true
+            else
+                itemList[v.Name] = true
             end
         end
     end
 end
 
--- Kill humanoid
-local function killHumanoid(model)
-    local humanoid = model:FindFirstChildWhichIsA("Humanoid", true)
-    if humanoid and humanoid.Health > 0 then
-        humanoid.Health = 0
-    end
-end
-
--- Tên đã xử lý
-local processed = {}
-
--- Tự động quét
-local function autoScan()
-    local folder = workspace:FindFirstChild("RoadPrefabs")
-    if not folder then return end
-    for _, obj in ipairs(folder:GetChildren()) do
-        if obj:IsA("Model") and not processed[obj] and hasHumanoid(obj) then
-            processed[obj] = true
-            bringToFront(obj)
-            task.wait(0.5)
-            killHumanoid(obj)
-        end
-    end
-end
-
--- Toggle nút
-local tracking = false
-MainTab:CreateButton({
-    Name = "Bắt đầu Theo Dõi & Diệt Humanoid",
-    Callback = function()
-        if not tracking then
-            tracking = true
-            Rayfield:Notify({Title = "Đang Theo Dõi", Content = "Sẵn sàng tiêu diệt Humanoid"})
-            while tracking do
-                autoScan()
-                task.wait(1)
+-- Hàm bring model
+local function bringByName(name)
+    for _, v in ipairs(Workspace:GetDescendants()) do
+        if v:IsA("Model") and v.Name == name and not Players:GetPlayerFromCharacter(v) then
+            local root = v:FindFirstChild("HumanoidRootPart") or v:FindFirstChildWhichIsA("BasePart")
+            if root then
+                v.PrimaryPart = root
+                v:SetPrimaryPartCFrame(HRP.CFrame * CFrame.new(0, 0, -10))
+                for _, d in ipairs(v:GetDescendants()) do
+                    if d:IsA("BasePart") then
+                        d.Anchored = false
+                        d.CanCollide = true
+                        d:SetNetworkOwner(LocalPlayer)
+                    end
+                end
             end
         end
     end
-})
+end
+
+-- Convert từ dictionary -> list
+local function dictToList(dict)
+    local list = {}
+    for name in pairs(dict) do
+        table.insert(list, name)
+    end
+    table.sort(list)
+    return list
+end
+
+-- Giao diện bring item
+tab:CreateDropdown("Bring Vật Phẩm", dictToList(itemList), function(selected)
+    bringByName(selected)
+end)
+
+-- Giao diện bring sinh vật
+tab:CreateDropdown("Bring Sinh Vật", dictToList(creatureList), function(selected)
+    bringByName(selected)
+end)
+
+-- Nút làm mới
+tab:CreateButton("🔄 Làm mới danh sách", function()
+    refreshList()
+    RedzLib:Notify("Làm mới xong!", "Danh sách đã được cập nhật.", 3)
+end)
+
+-- Khởi chạy lần đầu
+refreshList()

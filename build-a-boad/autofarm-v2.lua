@@ -4,7 +4,7 @@ local tween = game:GetService("TweenService")
 local runService = game:GetService("RunService")
 
 local CONFIG = {
-    TARGET_GAME_ID = 123456789,
+    TARGET_GAME_ID = 537413528,
     GRAVITY_REDUCED = 1.0,
     GRAVITY_DEFAULT = 196.2,
     TWEEN_SPEEDS = {

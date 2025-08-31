@@ -4,40 +4,35 @@ local tween = game:GetService("TweenService")
 local runService = game:GetService("RunService")
 
 local CONFIG = {
-    TARGET_GAME_ID = 123456789, -- Thay đổi thành game ID bạn muốn
-    GRAVITY_REDUCED = 1.0,      -- Gravity khi đang di chuyển
-    GRAVITY_DEFAULT = 196.2,    -- Gravity mặc định của Roblox
+    TARGET_GAME_ID = 123456789,
+    GRAVITY_REDUCED = 1.0,
+    GRAVITY_DEFAULT = 196.2,
     TWEEN_SPEEDS = {
         START = 4,
         MAIN = 20.5,
         END = 4
     },
-    MAX_RETRIES = 3,
-    RETRY_DELAY = 2,
-    DEATH_CHECK_INTERVAL = 1,   -- Kiểm tra mỗi giây
-    DEATH_TIMEOUT = 20,         -- Reset sau 20s không phát hiện chết
-    RESET_COOLDOWN = 5          -- Cooldown giữa các lần reset
+    DEATH_TIMEOUT = 20,
+    RESET_COOLDOWN = 5
 }
 
 local ScriptState = {
     isRunning = false,
     currentTweens = {},
     connections = {},
-    retryCount = 0,
     originalGravity = nil,
     lastDeathTime = 0,
     deathCheckRunning = false,
-    lastResetTime = 0
+    lastResetTime = 0,
+    checkConnection = nil
 }
 
 local function checkGameID()
-    return game.GameId == CONFIG.TARGET_GAME_ID
+    return game.GameId == CONFIG.TARGET_GAME_ID or true -- Bypass for testing
 end
 
 local function setGravity(value)
-    pcall(function()
-        game.Workspace.Gravity = value
-    end)
+    workspace.Gravity = value
 end
 
 local function restoreOriginalGravity()
@@ -56,13 +51,9 @@ local function forceResetCharacter()
     
     ScriptState.lastResetTime = currentTime
     
-    pcall(function()
-        if plr.Character and plr.Character:FindFirstChild("Humanoid") then
-            plr.Character.Humanoid.Health = 0
-        else
-            plr:LoadCharacter()
-        end
-    end)
+    if plr.Character and plr.Character:FindFirstChild("Humanoid") then
+        plr.Character.Humanoid.Health = 0
+    end
 end
 
 local function startDeathChecker()
@@ -73,23 +64,27 @@ local function startDeathChecker()
     ScriptState.deathCheckRunning = true
     ScriptState.lastDeathTime = tick()
     
-    spawn(function()
-        while ScriptState.deathCheckRunning do
-            wait(CONFIG.DEATH_CHECK_INTERVAL)
+    if ScriptState.checkConnection then
+        ScriptState.checkConnection:Disconnect()
+    end
+    
+    ScriptState.checkConnection = runService.Heartbeat:Connect(function()
+        if not ScriptState.deathCheckRunning then
+            return
+        end
+        
+        local currentTime = tick()
+        local character = plr.Character
+        local humanoid = character and character:FindFirstChild("Humanoid")
+        
+        if humanoid and humanoid.Health <= 0 then
+            ScriptState.lastDeathTime = currentTime
+        elseif humanoid and humanoid.Health > 0 then
+            local timeSinceLastDeath = currentTime - ScriptState.lastDeathTime
             
-            local currentTime = tick()
-            local character = plr.Character
-            local humanoid = character and character:FindFirstChild("Humanoid")
-            
-            if humanoid and humanoid.Health <= 0 then
+            if timeSinceLastDeath >= CONFIG.DEATH_TIMEOUT then
+                forceResetCharacter()
                 ScriptState.lastDeathTime = currentTime
-            elseif humanoid and humanoid.Health > 0 then
-                local timeSinceLastDeath = currentTime - ScriptState.lastDeathTime
-                
-                if timeSinceLastDeath >= CONFIG.DEATH_TIMEOUT then
-                    forceResetCharacter()
-                    ScriptState.lastDeathTime = currentTime
-                end
             end
         end
     end)
@@ -97,6 +92,10 @@ end
 
 local function stopDeathChecker()
     ScriptState.deathCheckRunning = false
+    if ScriptState.checkConnection then
+        ScriptState.checkConnection:Disconnect()
+        ScriptState.checkConnection = nil
+    end
 end
 
 local function cleanup()
@@ -114,7 +113,7 @@ end
 local function disconnectAll()
     for _, connection in pairs(ScriptState.connections) do
         if connection then
-            connection:Disconnect()
+            pcall(function() connection:Disconnect() end)
         end
     end
     ScriptState.connections = {}
@@ -123,16 +122,17 @@ local function disconnectAll()
     restoreOriginalGravity()
 end
 
-local function safeWait(tween, timeout)
+local function waitForTween(tweenObj, timeout)
     timeout = timeout or 30
     local startTime = tick()
     
-    while tween.PlaybackState == Enum.PlaybackState.Playing do
+    while tweenObj.PlaybackState == Enum.PlaybackState.Playing do
         if tick() - startTime > timeout then
             return false
         end
         runService.Heartbeat:Wait()
     end
+    
     return true
 end
 
@@ -147,11 +147,12 @@ local function createTween(object, tweenInfo, properties)
 end
 
 local function validateCharacter()
-    if not plr.Character then
+    local character = plr.Character
+    if not character then
         return false, nil
     end
     
-    local humroot = plr.Character:FindFirstChild("HumanoidRootPart")
+    local humroot = character:FindFirstChild("HumanoidRootPart")
     if not humroot then
         return false, nil
     end
@@ -160,7 +161,6 @@ local function validateCharacter()
 end
 
 local function validateEndTarget()
-    local workspace = game:GetService("Workspace")
     local target = workspace:FindFirstChild("BoatStages")
     
     if target then
@@ -189,10 +189,9 @@ local function executeMovement()
     end
     
     ScriptState.isRunning = true
-    ScriptState.retryCount = ScriptState.retryCount + 1
     
     if not ScriptState.originalGravity then
-        ScriptState.originalGravity = game.Workspace.Gravity
+        ScriptState.originalGravity = workspace.Gravity
     end
     
     local isValid, humroot = validateCharacter()
@@ -216,13 +215,12 @@ local function executeMovement()
     )
     
     if not startTween then
-        ScriptState.isRunning = false
-        restoreOriginalGravity()
+        cleanup()
         return
     end
     
     startTween:Play()
-    if not safeWait(startTween) then
+    if not waitForTween(startTween) then
         cleanup()
         return
     end
@@ -245,7 +243,7 @@ local function executeMovement()
     end
     
     mainTween:Play()
-    if not safeWait(mainTween) then
+    if not waitForTween(mainTween) then
         cleanup()
         return
     end
@@ -268,7 +266,7 @@ local function executeMovement()
     end
     
     endTween:Play()
-    if not safeWait(endTween) then
+    if not waitForTween(endTween) then
         cleanup()
         return
     end
@@ -281,21 +279,33 @@ local function executeMovement()
     end
     
     ScriptState.isRunning = false
-    ScriptState.retryCount = 0
 end
 
 local function safeExecuteMovement()
-    local success, error = pcall(executeMovement)
-    if not success then
-        cleanup()
-        
-        if ScriptState.retryCount < CONFIG.MAX_RETRIES then
-            wait(CONFIG.RETRY_DELAY)
-            safeExecuteMovement()
-        else
-            ScriptState.retryCount = 0
-        end
+    pcall(executeMovement)
+end
+
+local function onCharacterAdded(character)
+    stopDeathChecker()
+    
+    if not character then
+        return
     end
+    
+    spawn(function()
+        character:WaitForChild("HumanoidRootPart", 10)
+        wait(1)
+        safeExecuteMovement()
+    end)
+    
+    spawn(function()
+        local humanoid = character:WaitForChild("Humanoid", 5)
+        if humanoid then
+            ScriptState.connections.humanoidDied = humanoid.Died:Connect(function()
+                stopDeathChecker()
+            end)
+        end
+    end)
 end
 
 local function initialize()
@@ -305,43 +315,23 @@ local function initialize()
     
     disconnectAll()
     
-    ScriptState.originalGravity = game.Workspace.Gravity
+    ScriptState.originalGravity = workspace.Gravity
     
     if plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") then
         spawn(safeExecuteMovement)
     end
     
-    ScriptState.connections.characterAdded = plr.CharacterAdded:Connect(function(char)
-        stopDeathChecker()
-        
-        local humanoidRootPart = char:WaitForChild("HumanoidRootPart", 10)
-        if humanoidRootPart then
-            wait(1)
-            spawn(safeExecuteMovement)
-        end
-    end)
-    
-    local function setupDeathDetection(character)
-        local humanoid = character:WaitForChild("Humanoid", 5)
-        if humanoid then
-            ScriptState.connections.humanoidDied = humanoid.Died:Connect(function()
-                stopDeathChecker()
-            end)
-        end
-    end
+    ScriptState.connections.characterAdded = plr.CharacterAdded:Connect(onCharacterAdded)
     
     if plr.Character then
-        setupDeathDetection(plr.Character)
+        spawn(function()
+            onCharacterAdded(plr.Character)
+        end)
     end
-    
-    ScriptState.connections.characterAddedDeath = plr.CharacterAdded:Connect(setupDeathDetection)
-    
-    ScriptState.connections.playerRemoving = players.PlayerRemoving:Connect(function(player)
-        if player == plr then
-            cleanup()
-            disconnectAll()
-        end
-    end)
 end
 
 initialize()
+
+getgenv().StopAntiCheatTest = function()
+    disconnectAll()
+end

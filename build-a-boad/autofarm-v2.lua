@@ -28,7 +28,7 @@ local ScriptState = {
 }
 
 local function checkGameID()
-    return game.GameId == CONFIG.TARGET_GAME_ID or true -- Bypass for testing
+    return game.GameId == CONFIG.TARGET_GAME_ID or true
 end
 
 local function setGravity(value)

@@ -5,7 +5,7 @@ local runService = game:GetService("RunService")
 
 local CONFIG = {
     TARGET_GAME_ID = 537413528,
-    GRAVITY_REDUCED = 1.0,
+    GRAVITY_REDUCED = 0.1,
     GRAVITY_DEFAULT = 196.2,
     TWEEN_SPEEDS = {
         START = 4,
@@ -332,6 +332,5 @@ end
 
 initialize()
 
-getgenv().StopAntiCheatTest = function()
-    disconnectAll()
+print("autofarm make by @tky567 (discord only) and claude")
 end

@@ -1,17 +1,16 @@
 local Players = game:GetService("Players")
 local UIS = game:GetService("UserInputService")
 
--- Safe hash
+-- hash cực đơn giản (Lua thuần, không bitwise)
 local function simpleHash(str)
-    local hash = 2166136261
+    local hash = 0
     for i = 1, #str do
-        hash = hash ~ string.byte(str, i)
-        hash = (hash * 16777619) % 2^32
+        hash = (hash + string.byte(str, i) * i) % 100000000
     end
-    return string.format("%08X", hash)
+    return tostring(hash)
 end
 
--- Safe call
+-- safe call helper
 local function safe(fn, default)
     local ok, res = pcall(fn)
     if ok and res ~= nil then
@@ -20,9 +19,8 @@ local function safe(fn, default)
     return default
 end
 
--- Detect client / executor
-local clientName = "unknown"
-clientName = safe(function()
+-- client / executor name
+local clientName = safe(function()
     if identifyexecutor then
         return identifyexecutor()
     end
@@ -32,39 +30,33 @@ clientName = tostring(clientName):lower()
 clientName = clientName:gsub("%s+", "")
 clientName = clientName:gsub("[^%w]", "")
 
--- Collect info (mobile-safe)
+-- device info (mobile-safe)
 local platform = safe(function()
-    return UIS:GetPlatform()
-end, "UnknownPlatform")
+    return tostring(UIS:GetPlatform())
+end, "unknown")
 
 local locale = safe(function()
     return Players.LocalPlayer.LocaleId
 end, "unknown")
 
 local resolution = safe(function()
-    return workspace.CurrentCamera.ViewportSize.X .. "x" ..
-           workspace.CurrentCamera.ViewportSize.Y
+    local v = workspace.CurrentCamera.ViewportSize
+    return v.X .. "x" .. v.Y
 end, "unknown")
 
--- Fingerprint
-local fingerprintRaw = table.concat({
-    tostring(platform),
-    locale,
-    resolution
-}, "|")
+-- fingerprint
+local rawFingerprint = platform .. "|" .. locale .. "|" .. resolution
+local fingerprintID = simpleHash(rawFingerprint)
 
-local fingerprintID = simpleHash(fingerprintRaw)
+-- client hwid (delta-style)
+local clientHWID = clientName .. "_" .. simpleHash(clientName .. "|" .. fingerprintID)
 
--- Client HWID (Delta-style)
-local clientHWIDRaw = clientName .. "|" .. fingerprintID
-local clientHWID = clientName .. "_" .. simpleHash(clientHWIDRaw)
-
--- Output
-print("===== CLIENT HWID TEST =====")
-print("Client Name   :", clientName)
-print("Platform      :", platform)
-print("Locale        :", locale)
-print("Resolution    :", resolution)
-print("FingerprintID :", fingerprintID)
-print("Client HWID   :", clientHWID)
-print("============================")
+-- output
+print("===== HWID TEST =====")
+print("Client Name  :", clientName)
+print("Platform     :", platform)
+print("Locale       :", locale)
+print("Resolution   :", resolution)
+print("Fingerprint  :", fingerprintID)
+print("Client HWID  :", clientHWID)
+print("=====================")

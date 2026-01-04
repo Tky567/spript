@@ -7,6 +7,7 @@
     
     const token = "VIP_" + btoa(unescape(encodeURIComponent(JSON.stringify({t, u, c}))));
     
+    console.log("sử dụng cho tky bot và đừng chia sẻ cho bất cứ ai biết")
     console.log(token);
     navigator.clipboard?.writeText(token);
 })();

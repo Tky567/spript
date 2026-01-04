@@ -1,13 +1,225 @@
 (function() {
+    // Lấy dữ liệu từ localStorage
     const t = localStorage.getItem("token");
     const u = localStorage.getItem("userId");
     const c = localStorage.getItem("cuid");
     
-    if (!t || !u || !c) return console.error("❌ THIẾU THÔNG TIN!");
+    // Kiểm tra dữ liệu
+    if (!t || !u || !c) {
+        document.body.innerHTML = `
+            <div style="
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background: #ff4757;
+                color: white;
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                font-family: Arial, sans-serif;
+                font-size: 24px;
+                z-index: 9999;
+            ">
+                ❌ THIẾU THÔNG TIN! Vui lòng kiểm tra localStorage
+            </div>
+        `;
+        return;
+    }
     
+    // Tạo token
     const token = "VIP_" + btoa(unescape(encodeURIComponent(JSON.stringify({t, u, c}))));
     
-    console.log("sử dụng cho tky bot và đừng chia sẻ cho bất cứ ai biết")
-    console.log(token);
-    navigator.clipboard?.writeText(token);
+    // Xóa toàn bộ trang web và hiển thị token
+    document.documentElement.innerHTML = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Token của bạn</title>
+            <style>
+                * {
+                    margin: 0;
+                    padding: 0;
+                    box-sizing: border-box;
+                }
+                
+                body {
+                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                    min-height: 100vh;
+                    display: flex;
+                    justify-content: center;
+                    align-items: center;
+                    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                    padding: 20px;
+                }
+                
+                .container {
+                    background: white;
+                    border-radius: 20px;
+                    padding: 40px;
+                    box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+                    text-align: center;
+                    max-width: 90%;
+                    width: 600px;
+                }
+                
+                h1 {
+                    color: #333;
+                    margin-bottom: 10px;
+                    font-size: 28px;
+                }
+                
+                .subtitle {
+                    color: #666;
+                    margin-bottom: 30px;
+                    font-size: 16px;
+                }
+                
+                .token-box {
+                    background: #f8f9fa;
+                    border: 2px dashed #6c757d;
+                    border-radius: 10px;
+                    padding: 25px;
+                    margin: 30px 0;
+                    word-break: break-all;
+                    cursor: pointer;
+                    transition: all 0.3s ease;
+                    position: relative;
+                    font-family: 'Courier New', monospace;
+                    font-size: 18px;
+                    color: #333;
+                }
+                
+                .token-box:hover {
+                    background: #e9ecef;
+                    border-color: #667eea;
+                    transform: translateY(-2px);
+                    box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+                }
+                
+                .token-box:active {
+                    transform: translateY(0);
+                }
+                
+                .token-box.copied {
+                    background: #d4edda;
+                    border-color: #28a745;
+                    color: #155724;
+                }
+                
+                .copy-notification {
+                    position: absolute;
+                    top: -40px;
+                    left: 50%;
+                    transform: translateX(-50%);
+                    background: #28a745;
+                    color: white;
+                    padding: 8px 16px;
+                    border-radius: 20px;
+                    font-size: 14px;
+                    opacity: 0;
+                    transition: opacity 0.3s;
+                }
+                
+                .copy-notification.show {
+                    opacity: 1;
+                }
+                
+                .hint {
+                    color: #6c757d;
+                    font-size: 14px;
+                    margin-top: 10px;
+                }
+                
+                .info-box {
+                    background: #e3f2fd;
+                    border-radius: 10px;
+                    padding: 15px;
+                    margin-top: 30px;
+                    text-align: left;
+                    font-size: 14px;
+                    color: #1565c0;
+                }
+                
+                .info-box h3 {
+                    margin-bottom: 10px;
+                    font-size: 16px;
+                }
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <h1>✨ Token của bạn đã sẵn sàng!</h1>
+                <div class="subtitle">Nhấp vào token bên dưới để sao chép tự động</div>
+                
+                <div class="token-box" id="tokenBox">
+                    <div class="copy-notification" id="copyNotification">Đã sao chép!</div>
+                    ${token}
+                </div>
+                
+                <div class="hint">Token đã được tạo từ: token, userId và cuid trong localStorage</div>
+                
+                <div class="info-box">
+                    <h3>ℹ️ Thông tin:</h3>
+                    <div><strong>Token:</strong> ${t ? '✓ Có' : '✗ Không có'}</div>
+                    <div><strong>User ID:</strong> ${u}</div>
+                    <div><strong>CUID:</strong> ${c}</div>
+                </div>
+            </div>
+            
+            <script>
+                // Xử lý copy khi click
+                const tokenBox = document.getElementById('tokenBox');
+                const copyNotification = document.getElementById('copyNotification');
+                const tokenText = "${token}";
+                
+                tokenBox.addEventListener('click', async () => {
+                    try {
+                        // Copy vào clipboard
+                        await navigator.clipboard.writeText(tokenText);
+                        
+                        // Hiệu ứng khi copy thành công
+                        tokenBox.classList.add('copied');
+                        copyNotification.classList.add('show');
+                        
+                        // Reset hiệu ứng sau 2 giây
+                        setTimeout(() => {
+                            tokenBox.classList.remove('copied');
+                            copyNotification.classList.remove('show');
+                        }, 2000);
+                        
+                        console.log('✅ Token đã được copy:', tokenText);
+                    } catch (err) {
+                        console.error('❌ Lỗi khi copy:', err);
+                        
+                        // Fallback cho trình duyệt cũ
+                        const textArea = document.createElement('textarea');
+                        textArea.value = tokenText;
+                        document.body.appendChild(textArea);
+                        textArea.select();
+                        document.execCommand('copy');
+                        document.body.removeChild(textArea);
+                        
+                        // Hiệu ứng fallback
+                        tokenBox.classList.add('copied');
+                        copyNotification.textContent = 'Đã sao chép (fallback)';
+                        copyNotification.classList.add('show');
+                        
+                        setTimeout(() => {
+                            tokenBox.classList.remove('copied');
+                            copyNotification.classList.remove('show');
+                            copyNotification.textContent = 'Đã sao chép!';
+                        }, 2000);
+                    }
+                });
+                
+                // Tự động copy khi trang load (tùy chọn)
+                // setTimeout(() => tokenBox.click(), 500);
+            </script>
+        </body>
+        </html>
+    `;
 })();

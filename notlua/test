@@ -99,7 +99,6 @@
                     <div class="token-text">${token}</div>
                 </div>
                 
-                <div class="hint">Token đã được tạo từ: token, userId và cuid trong localStorage</div>
                 
                 <div class="info-box">
                     <h3>ℹ️ Thông tin:</h3>

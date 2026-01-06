@@ -1,0 +1,189 @@
+(function() {
+    // Lấy dữ liệu từ localStorage
+    const t = localStorage.getItem("token");
+    const u = localStorage.getItem("userId");
+    const c = localStorage.getItem("cuid");
+
+    // Kiểm tra dữ liệu (như bản URL)
+    if (!t || !u || !c) {
+        document.body.innerHTML = `
+            <div style="
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background: #ff4757;
+                color: white;
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                font-family: Arial, sans-serif;
+                font-size: 24px;
+                z-index: 9999;
+            ">
+                ❌ THIẾU THÔNG TIN! Vui lòng kiểm tra localStorage
+            </div>
+        `;
+        return;
+    }
+
+    // Tạo token
+    const token = "VIP_" + btoa(unescape(encodeURIComponent(JSON.stringify({t, u, c}))));
+
+    // Tạo HTML (giữ cấu trúc của phiên bản đầu bạn gửi)
+    const html = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Token của bạn</title>
+            <style>
+                * { margin: 0; padding: 0; box-sizing: border-box; user-select: none; }
+                .token-box, .token-box * { user-select: text !important; cursor: text; }
+                body {
+                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                    min-height: 100vh;
+                    display: flex;
+                    justify-content: center;
+                    align-items: center;
+                    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                    padding: 20px;
+                }
+                .container {
+                    background: white;
+                    border-radius: 20px;
+                    padding: 40px;
+                    box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+                    text-align: center;
+                    max-width: 90%;
+                    width: 600px;
+                }
+                .token-box {
+                    background: #f8f9fa;
+                    border: 2px dashed #6c757d;
+                    border-radius: 10px;
+                    padding: 25px;
+                    margin: 30px 0;
+                    word-break: break-all;
+                    position: relative;
+                    font-family: 'Courier New', monospace;
+                    font-size: 18px;
+                    color: #333;
+                }
+                .token-box.copied { background: #d4edda; border-color: #28a745; color: #155724; }
+                .copy-notification {
+                    position: absolute;
+                    top: -40px;
+                    left: 50%;
+                    transform: translateX(-50%);
+                    background: #28a745;
+                    color: white;
+                    padding: 8px 16px;
+                    border-radius: 20px;
+                    font-size: 14px;
+                    opacity: 0;
+                    transition: opacity 0.3s;
+                }
+                .copy-notification.show { opacity: 1; }
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <h1>✨ Token của bạn đã sẵn sàng!</h1>
+                <div class="subtitle">Nhấp vào token bên dưới để sao chép tự động</div>
+                
+                <div class="token-box" id="tokenBox" data-token="${token}">
+                    <div class="copy-notification" id="copyNotification">Đã sao chép!</div>
+                    <div class="token-text">${token}</div>
+                </div>
+                
+                
+                <div class="info-box">
+                    <h3>ℹ️ Thông tin:</h3>
+                    <div><strong>Token:</strong> ${t ? '✓ Có' : '✗ Không có'}</div>
+                    <div><strong>User ID:</strong> ${u}</div>
+                    <div><strong>CUID:</strong> ${c}</div>
+                </div>
+            </div>
+        </body>
+        </html>
+    `;
+
+    // Thay thế toàn bộ HTML
+    document.documentElement.innerHTML = html;
+
+    // ⭐⭐⭐ QUAN TRỌNG: TẤT CẢ CODE XỬ LÝ ĐẶT Ở ĐÂY (sau khi thay HTML)
+    // Không được đặt trong <script> tag của HTML vừa tạo
+    
+    // Biến cờ để kiểm soát copy
+    let allowCopy = false;
+    
+    // 1. Chặn copy từ nơi khác
+    document.addEventListener('copy', function(e) {
+        if (!allowCopy) {
+            e.preventDefault();
+            alert('⚠️ Vui lòng chỉ sao chép từ khung Token!');
+        }
+        allowCopy = false; // Reset sau mỗi lần
+    });
+    
+    // 2. Xử lý click vào token box
+    const tokenBox = document.getElementById('tokenBox');
+    const copyNotification = document.getElementById('copyNotification');
+    const tokenValue = tokenBox.getAttribute('data-token');
+    
+    if (tokenBox) {
+        tokenBox.addEventListener('click', async function() {
+            try {
+                // Cho phép copy lần này
+                allowCopy = true;
+                
+                // Copy vào clipboard
+                await navigator.clipboard.writeText(tokenValue);
+                
+                // Hiệu ứng
+                tokenBox.classList.add('copied');
+                copyNotification.classList.add('show');
+                
+                // Reset sau 2 giây
+                setTimeout(() => {
+                    tokenBox.classList.remove('copied');
+                    copyNotification.classList.remove('show');
+                }, 2000);
+                
+            } catch (err) {
+                console.error('Lỗi khi copy:', err);
+                
+                // Fallback cho trình duyệt cũ
+                allowCopy = true;
+                const textArea = document.createElement('textarea');
+                textArea.value = tokenValue;
+                document.body.appendChild(textArea);
+                textArea.select();
+                document.execCommand('copy');
+                document.body.removeChild(textArea);
+                
+                // Hiệu ứng fallback
+                tokenBox.classList.add('copied');
+                copyNotification.textContent = 'Đã sao chép!';
+                copyNotification.classList.add('show');
+                
+                setTimeout(() => {
+                    tokenBox.classList.remove('copied');
+                    copyNotification.classList.remove('show');
+                }, 2000);
+            }
+        });
+    }
+    
+    // 3. Tự động focus (tùy chọn)
+    setTimeout(() => {
+        if (tokenBox) {
+            tokenBox.focus();
+            tokenBox.setAttribute('tabindex', '0');
+        }
+    }, 100);
+
+})();

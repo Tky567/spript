@@ -192,7 +192,7 @@
                 updateStatus('active', 'Success!');
                 nextCheckTime = Date.now() + 10000;
             } else {
-                updateStatus('active', 'Ổn định');
+                updateStatus('active', 'refresh');
                 nextCheckTime = Date.now() + CHECK_INTERVAL;
             }
         } catch (e) {

@@ -1,5 +1,5 @@
--- [[ NAME HUB MOBILE EDITION - FTAP ]]
--- Viết bởi Antigravity AI (Dựa trên source Name Hub & Rayfield)
+-- [[ NAME HUB MOBILE EDITION - FTAP (UPDATED) ]]
+-- Viết bởi Antigravity AI (Dựa trên source Name Hub & captures từ Remote Spy)
 
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 
@@ -9,7 +9,8 @@ local _G_Settings = {
     FlingStrength = 850,
     AntiGrab = false,
     KillAura = false,
-    AuraRange = 20
+    AuraRange = 25,
+    SuperThrow = false
 }
 
 local LP = game.Players.LocalPlayer
@@ -18,22 +19,23 @@ local RepS = game:GetService("ReplicatedStorage")
 
 -- 1. WINDOW
 local Window = Rayfield:CreateWindow({
-    Name = "Name Hub - Mobile Edition",
+    Name = "Name Hub - Mobile Edition (Pro)",
     LoadingTitle = "Fling Things and People",
     LoadingSubtitle = "by Zenon & Antigravity",
-    ConfigurationSaving = { Enabled = true, FileName = "NameHubMobile" },
-    KeySystem = false -- TẮT KEY SYSTEM CHO BẠN
+    ConfigurationSaving = { Enabled = true, FileName = "NameHubMobileV2" },
+    KeySystem = false 
 })
 
 -- 2. TABS
 local MainTab = Window:CreateTab("Main", 4483362458)
 local AuraTab = Window:CreateTab("Aura", 4483362458)
+local MiscTab = Window:CreateTab("Misc", 4483362458)
 
 -- 3. MAIN FEATURES
-MainTab:CreateSection("Fling Settings")
+MainTab:CreateSection("Fling & Physics")
 
 MainTab:CreateToggle({
-    Name = "Enable Fling",
+    Name = "Enable Fling (Spinbot)",
     CurrentValue = false,
     Callback = function(Value)
         _G_Settings.FlingEnabled = Value
@@ -42,7 +44,7 @@ MainTab:CreateToggle({
 
 MainTab:CreateSlider({
     Name = "Fling Strength",
-    Range = {100, 5000},
+    Range = {100, 10000},
     Increment = 100,
     Suffix = "Power",
     CurrentValue = 850,
@@ -51,21 +53,19 @@ MainTab:CreateSlider({
     end,
 })
 
-MainTab:CreateSection("Anti Features")
-
 MainTab:CreateToggle({
-    Name = "Anti Grab (Auto Struggle)",
+    Name = "Super Throw (From NameHub)",
     CurrentValue = false,
     Callback = function(Value)
-        _G_Settings.AntiGrab = Value
+        _G_Settings.SuperThrow = Value
     end,
 })
 
 -- 4. AURA FEATURES
-AuraTab:CreateSection("Combat Aura")
+AuraTab:CreateSection("Combat Aura (RemoteSpy Enhanced)")
 
 AuraTab:CreateToggle({
-    Name = "Kill Aura",
+    Name = "Kill Aura (Fling Others)",
     CurrentValue = false,
     Callback = function(Value)
         _G_Settings.KillAura = Value
@@ -74,60 +74,81 @@ AuraTab:CreateToggle({
 
 AuraTab:CreateSlider({
     Name = "Aura Range",
-    Range = {5, 50},
+    Range = {10, 100},
     Increment = 1,
     Suffix = "Studs",
-    CurrentValue = 20,
+    CurrentValue = 25,
     Callback = function(Value)
         _G_Settings.AuraRange = Value
     end,
 })
 
+-- 5. MISC FEATURES
+MiscTab:CreateSection("Protection")
+
+MiscTab:CreateToggle({
+    Name = "Anti Grab (Auto Struggle)",
+    CurrentValue = false,
+    Callback = function(Value)
+        _G_Settings.AntiGrab = Value
+    end,
+})
+
+MiscTab:CreateButton({
+    Name = "Destroy All Grab Lines (Anti-Lag)",
+    Callback = function()
+        for _, part in pairs(workspace:GetDescendants()) do
+            if part:IsA("BasePart") then
+                RepS.GrabEvents.DestroyGrabLine:FireServer(part)
+            end
+        end
+    end,
+})
+
 -- [[ LOGIC THỰC THI (CORE) ]]
 
--- Loop xử lý Fling & Anti-Grab
+-- Loop chính xử lý Fling, Anti-Grab và Aura (Dùng Heartbeat để mượt nhất)
 RS.Heartbeat:Connect(function()
     local Char = LP.Character
     if not Char then return end
     local HRP = Char:FindFirstChild("HumanoidRootPart")
     if not HRP then return end
 
-    -- Thực thi Fling
+    -- 1. Logic Fling (Spin Character)
     if _G_Settings.FlingEnabled then
         HRP.RotVelocity = Vector3.new(0, _G_Settings.FlingStrength * 10, 0)
     end
 
-    -- Thực thi Anti-Grab (Dựa trên lệnh Struggle tìm thấy trong source)
+    -- 2. Logic Anti-Grab (Dựa trên lệnh Struggle)
     if _G_Settings.AntiGrab then
-        -- Kiểm tra nếu đang bị cầm (Dựa trên cấu trúc game)
         if Char:FindFirstChild("Head") and Char.Head:FindFirstChild("PartOwner") then
             RepS.CharacterEvents.Struggle:FireServer()
             RepS.GameCorrectionEvents.StopAllVelocity:FireServer()
         end
     end
-end)
 
--- Loop xử lý Kill Aura
-task.spawn(function()
-    while task.wait(0.1) do
-        if _G_Settings.KillAura and LP.Character and LP.Character:FindFirstChild("HumanoidRootPart") then
-            for _, player in pairs(game.Players:GetPlayers()) do
-                if player ~= LP and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
-                    local dist = (player.Character.HumanoidRootPart.Position - LP.Character.HumanoidRootPart.Position).Magnitude
-                    if dist <= _G_Settings.AuraRange then
-                        -- Gửi lệnh chiếm quyền điều khiển vật thể của đối thủ
-                        -- Đây là kỹ thuật Fling Aura cực mạnh trong FTAP
-                        RepS.GrabEvents.SetNetworkOwner:FireServer(player.Character.HumanoidRootPart)
-                    end
+    -- 3. Logic Kill Aura (Dựa trên cấu trúc SetNetworkOwner từ Remote Spy)
+    if _G_Settings.KillAura then
+        for _, player in pairs(game.Players:GetPlayers()) do
+            if player ~= LP and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+                local targetHRP = player.Character.HumanoidRootPart
+                local dist = (targetHRP.Position - HRP.Position).Magnitude
+                
+                if dist <= _G_Settings.AuraRange then
+                    -- Kỹ thuật SetNetworkOwner + CFrame xa để văng đối thủ
+                    -- Lấy đúng cấu trúc từ file 2.lua trong thư mục new
+                    local flingCFrame = CFrame.new(9e9, 9e9, 9e9) 
+                    RepS.GrabEvents.SetNetworkOwner:FireServer(targetHRP, flingCFrame)
                 end
             end
         end
     end
 end)
 
+-- Thông báo khi script chạy xong
 Rayfield:Notify({
-    Title = "Name Hub Ready!",
-    Content = "Script đã sẵn sàng cho Mobile. Chúc bạn chơi vui vẻ!",
+    Title = "Name Hub Updated!",
+    Content = "Đã cập nhật logic từ Remote Spy. Các tính năng Aura đã mạnh hơn!",
     Duration = 5,
     Image = 4483362458,
 })
